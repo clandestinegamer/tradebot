@@ -25,7 +25,8 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
+      # GitHub's Ubuntu runners already include the Android SDK (ANDROID_HOME),
+      # and Gradle fetches any missing SDK parts itself.
 
       - name: Build APK
         run: |
