@@ -161,6 +161,25 @@ def build_app(cfg: Config | None = None, engine: Engine | None = None, run_loop:
     def sw():
         return FileResponse(DASH / "sw.js", media_type="text/javascript")
 
+    # ── Android app updates (no login: the APK holds no secrets, and Android only
+    #    installs an update signed with the same key as the app already on the phone) ──
+    app_dir = None if str(store.path) == ":memory:" else Path(store.path).resolve().parent / "app"
+
+    @app.get("/app/version.json", include_in_schema=False)
+    def app_version():
+        f = app_dir / "version.json" if app_dir else None
+        if not f or not f.is_file():
+            raise HTTPException(404, "no app update published on this server yet")
+        return FileResponse(f, media_type="application/json", headers={"Cache-Control": "no-store"})
+
+    @app.get("/app/TradeBot.apk", include_in_schema=False)
+    def app_apk():
+        f = app_dir / "TradeBot.apk" if app_dir else None
+        if not f or not f.is_file():
+            raise HTTPException(404, "no app update published on this server yet")
+        return FileResponse(f, media_type="application/vnd.android.package-archive", filename="TradeBot.apk",
+                            headers={"Cache-Control": "no-store"})
+
     # ── health (no login; reveals nothing sensitive) ──
     @app.get("/healthz", include_in_schema=False)
     def healthz():

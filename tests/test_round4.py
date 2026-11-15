@@ -342,3 +342,17 @@ def test_new_endpoints():
         assert c.post("/api/backup", headers=h).status_code == 400           # in-memory DB
         st = c.get("/api/status", headers=h).json()
         assert "fast_stops" in st and "backup_last" in st
+
+
+def test_app_update_files(tmp_path):
+    eng, _ = engine_at_setup()
+    eng.store = Store(str(tmp_path / "bot.db"))
+    with TestClient(build_app(eng.cfg, eng, run_loop=False)) as c:
+        assert c.get("/app/version.json").status_code == 404           # nothing published yet
+        (tmp_path / "app").mkdir()
+        (tmp_path / "app" / "version.json").write_text('{"versionCode": 105}')
+        (tmp_path / "app" / "TradeBot.apk").write_bytes(b"PK-apk")
+        r = c.get("/app/version.json")
+        assert r.status_code == 200 and r.json()["versionCode"] == 105  # no login needed
+        r = c.get("/app/TradeBot.apk")
+        assert r.content == b"PK-apk" and r.headers["content-type"] == "application/vnd.android.package-archive"

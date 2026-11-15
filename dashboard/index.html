@@ -157,7 +157,10 @@
       <div class="item"><div class="top"><span>Server</span><span class="mut" id="appServer"></span></div></div>
       <div class="item"><div class="top"><span>Fingerprint / PIN lock</span><button class="small" id="appLockBtn" onclick="toggleAppLock()"></button></div>
         <div class="sub">Asks for your fingerprint or screen lock each time the app opens.</div></div>
-      <button class="small" style="margin-top:8px" onclick="TradeBotApp.changeServer()">Change server</button></div>
+      <div class="item"><div class="top"><span>App version</span><span class="mut" id="appVer"></span></div>
+        <div class="sub">Updates download from your bot server and install by themselves when you leave the app.</div></div>
+      <div class="btns" style="margin-top:8px"><button class="small" id="appUpdBtn" onclick="TradeBotApp.checkForUpdate()">Check for updates</button>
+        <button class="small" onclick="TradeBotApp.changeServer()">Change server</button></div></div>
     <button onclick="logout()">Sign out this device</button>
   </section>
 </main>
@@ -365,6 +368,9 @@ function renderAppCard() {
   if (!window.TradeBotApp) return;
   $('appCard').style.display = ''; $('appServer').textContent = TradeBotApp.server();
   $('appLockBtn').textContent = TradeBotApp.lockEnabled() ? 'On — turn off' : 'Off — turn on';
+  const hasUpd = typeof TradeBotApp.appVersion === 'function';  // older app builds don't have the updater
+  $('appVer').textContent = hasUpd ? TradeBotApp.appVersion() : '1.0';
+  $('appUpdBtn').style.display = hasUpd ? '' : 'none';
 }
 function toggleAppLock() { TradeBotApp.setLockEnabled(!TradeBotApp.lockEnabled()); renderAppCard(); }
 async function showChart(id) {

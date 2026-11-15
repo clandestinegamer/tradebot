@@ -10,8 +10,10 @@ android {
         applicationId 'com.tradebot.app'
         minSdk 29          // Android 10+
         targetSdk 35
-        versionCode 1
-        versionName '1.0'
+        // The build server passes -PappVersion=<n> (one more for every change to the app),
+        // which is how the app spots that an update is waiting on your bot server.
+        versionCode((project.findProperty('appVersion') ?: '1') as int)
+        versionName "1.${(project.findProperty('appVersion') ?: '1')}"
     }
 
     // One fixed key so each new APK installs over the old one (Android refuses

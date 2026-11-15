@@ -1,0 +1,83 @@
+# Every push to main:
+#   1. runs the test suite;
+#   2. if the tests pass, moves the `release` branch to this commit. Your server's
+#      auto-updater only ever installs code from `release`, so a broken commit never reaches it;
+#   3. builds the Android app and publishes it (plus version.json) as the "Android app" release.
+#      Your server copies those to /app/, and the app updates itself from there.
+name: Test, release, build app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ci-main
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Move the release branch to this commit
+        run: git push --force origin HEAD:refs/heads/release
+
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history, to count app changes for the version number
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # GitHub's Ubuntu runners already include the Android SDK, and Gradle fetches missing parts.
+      - name: Build APK
+        working-directory: android
+        run: |
+          APP_VERSION=$((100 + $(git rev-list --count HEAD -- .)))
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease -PappVersion=$APP_VERSION
+          cp app/build/outputs/apk/release/app-release.apk ../TradeBot.apk
+
+      - name: Write version.json
+        run: |
+          SHA=$(sha256sum TradeBot.apk | cut -d' ' -f1)
+          printf '{"versionCode": %s, "versionName": "1.%s", "sha256": "%s", "commit": "%s"}\n' \
+            "$APP_VERSION" "$APP_VERSION" "$SHA" "$GITHUB_SHA" > version.json
+          cat version.json
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-latest
+          name: Android app
+          body: |
+            TradeBot app 1.${{ env.APP_VERSION }}, built from commit ${{ github.sha }}.
+            First install: download TradeBot.apk below, open it, and allow "Install unknown apps".
+            After that the app updates itself from your bot server.
+          files: |
+            TradeBot.apk
+            version.json
+          make_latest: true

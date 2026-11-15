@@ -78,7 +78,8 @@ def make_engine(closes, ai_decision="approve", ai_enabled=True, params=NO_FILTER
     sym = SymbolCfg("KRW-TEST", "upbit", "60m", "trend_rsi", params=dict(params))
     cfg = Config(symbols=[sym], risk=risk or RiskCfg(), ai=AICfg(enabled=ai_enabled, web_search=False),
                  secrets=Secrets(dashboard_token="secret"), starting_cash_krw=10_000_000,
-                 signals=SignalsCfg(enabled=False))
+                 signals=SignalsCfg(enabled=False),
+                 weekly_review=False)  # otherwise Sunday-evening test runs also call the (fake) AI
     store = Store(":memory:")
     fake_ai = FakeAI(ai_decision)
     eng = Engine(cfg, store, FakeData(closes), PaperExecutor(cfg, store), AIReviewer(cfg.ai, "", client=fake_ai))

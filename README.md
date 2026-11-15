@@ -101,7 +101,28 @@ Point your domain's DNS A-record at the server. Caddy then gets an HTTPS certifi
 - tax CSV downloads saved to your phone's Downloads folder
 - links to other sites open in your normal browser, and a bad HTTPS certificate is always refused
 
-**Getting the APK.** Push this project to a private GitHub repo. The workflow in `.github/workflows/android.yml` builds the app on GitHub's servers and publishes it as a release named **Android app**. On your phone, open the repo's **Releases**, download `TradeBot.apk`, open it, and allow your browser to install unknown apps when Android asks. New versions install over the old one.
+**Getting the APK.** Push this project to a private GitHub repo. The workflow in `.github/workflows/ci.yml` tests the code, builds the app on GitHub's servers and publishes it as a release named **Android app**. On your phone, open the repo's **Releases**, download `TradeBot.apk`, open it, and allow your browser to install unknown apps when Android asks. You only do this once (see automatic updates below).
+
+### Automatic updates
+
+Once set up, you never redownload anything:
+
+1. A change is pushed to `main`. GitHub runs the tests.
+2. **Only if they pass**, the `release` branch moves to that commit and a new app build is published.
+3. Every 5 minutes your server (`deploy/update.sh`, run by a systemd timer) pulls `release`, rebuilds the bot if anything changed, and copies the newest app to `data/app/`. `.env`, `data/` and your database are never touched. Settings you change in the dashboard live in the database, so they survive updates; hand edits to `config.toml` do not, so make changes through the dashboard or in git.
+4. The phone app checks your server when it opens (and from **Settings → Android app → Check for updates**), downloads the update in the background, checks its SHA-256, and installs it the next time you leave the app. The very first self-update asks you to tap **Update** once; after that Android lets it update silently (Android 12+). Android itself rejects any update not signed with the app's key.
+
+The dashboard itself is served by the bot, so dashboard changes appear as soon as the server updates.
+
+**One-time server setup.** Create a GitHub **fine-grained token** with access to only this repo and **Contents: Read-only**. Then on the server:
+
+```bash
+read -rsp "GitHub token: " T; echo; printf '%s' "$T" > /root/.tradebot-github-token; chmod 600 /root/.tradebot-github-token
+git -c http.extraHeader="Authorization: Basic $(printf 'x-access-token:%s' "$T" | base64 -w0)" clone https://github.com/<you>/tradebot /root/tradebot-git
+bash /root/tradebot-git/deploy/install-updater.sh
+```
+
+Check what the updater did with `journalctl -u tradebot-update -n 30`.
 
 To build it yourself instead: open `android/` in Android Studio, or run `./gradlew assembleRelease` with the Android SDK installed.
 
@@ -292,5 +313,6 @@ app/realtime.py    real-time stop checks           app/guardian.py   backup stop
 app/backup.py      nightly backups / restore
 app/backtest.py    backtest, walk-forward, portfolio, dual momentum, grid
 app/server.py      API + dashboard server         dashboard/        phone UI       config.toml  settings
-android/           the Android app (Java)         .github/workflows/android.yml  builds the APK
+android/           the Android app (Java)         .github/workflows/ci.yml  tests, release branch, APK
+deploy/            server auto-updater
 ```

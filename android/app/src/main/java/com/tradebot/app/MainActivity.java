@@ -52,6 +52,7 @@ public class MainActivity extends Activity {
     private boolean unlocked;
     private boolean prompting;
     private long backgroundedAt;
+    private Updater updater;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -87,6 +88,7 @@ public class MainActivity extends Activity {
         padForSystemBars(root);
         setContentView(root);
 
+        updater = new Updater(this);
         if (state != null) web.restoreState(state);
         else web.loadUrl(server + "/");
     }
@@ -116,6 +118,7 @@ public class MainActivity extends Activity {
             lockView.setVisibility(View.GONE);
         }
         web.onResume();
+        updater.checkInBackground(server);
     }
 
     @Override
@@ -124,6 +127,7 @@ public class MainActivity extends Activity {
         if (web == null) return;
         backgroundedAt = SystemClock.elapsedRealtime();
         web.onPause();
+        updater.onAppHidden();  // a downloaded update installs while you're away
     }
 
     @Override
@@ -290,6 +294,16 @@ public class MainActivity extends Activity {
                 Prefs.setLockEnabled(MainActivity.this, on);
                 toast(on ? "App lock on" : "App lock off");
             });
+        }
+
+        @JavascriptInterface
+        public String appVersion() {
+            return Updater.installedName(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public void checkForUpdate() {
+            updater.check(server, true);
         }
 
         @JavascriptInterface
