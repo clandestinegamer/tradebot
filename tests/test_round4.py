@@ -356,3 +356,13 @@ def test_app_update_files(tmp_path):
         assert r.status_code == 200 and r.json()["versionCode"] == 105  # no login needed
         r = c.get("/app/TradeBot.apk")
         assert r.content == b"PK-apk" and r.headers["content-type"] == "application/vnd.android.package-archive"
+
+
+def test_stock_symbols_wait_for_kis_keys():
+    from tests.test_bot import make_engine
+    eng, _ = make_engine(v_shape()[:80])
+    eng.cfg.symbols.append(SymbolCfg("005930", "kis_kr", "day", "trend_rsi"))
+    eng.data.kis = None                                    # no KIS keys in .env
+    eng.tick()
+    assert eng.last_error is None                          # stock symbol skipped, not an error
+    assert not any("005930" in e["msg"] for e in eng.store.events())

@@ -41,7 +41,9 @@ def build_engine(cfg: Config, store: Store | None = None, ai_client=None, notifi
     if s.kis_app_key:
         kis = KISClient(s.kis_app_key, s.kis_app_secret, s.kis_account_no, s.kis_account_product, s.kis_env)
     if cfg.data_source == "live" and any(x.market.startswith("kis") for x in cfg.symbols) and kis is None:
-        raise RuntimeError("KIS symbols are in the watchlist but KIS keys are missing in .env")
+        # Start anyway: crypto trades, and stock symbols are skipped until KIS keys are added.
+        log.warning("KIS keys missing in .env: stock symbols are paused, crypto keeps trading")
+        store.event("KIS keys not set up yet: stock symbols are paused until they're added to .env", "warn")
     fx = FXRates(store, cfg.usd_krw, online=cfg.data_source == "live")
     data = MarketData(cfg, upbit=upbit, kis=kis)
     data.fx_rates = fx

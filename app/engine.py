@@ -179,6 +179,8 @@ class Engine:
         ok = True
         with self.lock:
             for s in self.cfg.symbols:
+                if s.market.startswith("kis") and getattr(self.data, "kis", True) is None:
+                    continue  # stock symbols wait until KIS keys are added to .env
                 try:
                     self._process(s)
                 except Exception as e:
