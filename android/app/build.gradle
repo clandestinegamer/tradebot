@@ -1,0 +1,43 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.tradebot.app'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.tradebot.app'
+        minSdk 29          // Android 10+
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+
+    // One fixed key so each new APK installs over the old one (Android refuses
+    // updates signed with a different key). It only signs this sideloaded app.
+    signingConfigs {
+        shared {
+            storeFile file('tradebot.keystore')
+            storePassword 'tradebot'
+            keyAlias 'tradebot'
+            keyPassword 'tradebot'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.shared
+        }
+        debug {
+            signingConfig signingConfigs.shared
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+// No third-party libraries: the app uses only what ships with Android.

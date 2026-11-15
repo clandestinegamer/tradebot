@@ -1,0 +1,224 @@
+# ─────────────────────────────────────────────────────────────
+#  DEMO settings: synthetic prices, fast candles, no keys needed.
+#  Run: TRADEBOT_CONFIG=config.demo.toml uvicorn app.server:create_app --factory
+# ─────────────────────────────────────────────────────────────
+
+[general]
+trading_mode = "paper"        # "paper" = simulated fills with real prices | "live" = real orders
+data_source  = "demo"         # "live" = real Upbit/KIS prices | "demo" = synthetic prices (no keys needed)
+loop_seconds = 5              # how often the bot checks the markets
+starting_cash_krw = 10000000  # paper account starting balance (₩10M)
+usd_krw = 1400                # FX rate used to value US stocks in KRW (paper accounting / sizing)
+history_bars = 300            # candles loaded per check (the 200-candle long-term filter needs 210+)
+live_capital_krw = 0          # small-live start: in live mode the bot only uses this much (e.g. 500000); 0 = all
+paper_twin = true             # in live mode, also run a paper copy of the same settings to compare
+weekly_review = true          # Claude writes a short review every Sunday 20:00 KST
+demo_bar_seconds = 10         # demo mode only: one candle = this many seconds, so you see action fast
+
+[risk]
+max_position_pct     = 10     # max % of equity in any single holding
+risk_per_trade_pct   = 1.0    # max % of equity lost if a stop-loss is hit
+max_open_positions   = 5
+max_total_risk_pct   = 5      # combined loss if EVERY open stop were hit at once (0 = off)
+weekend_crypto_mult  = 0.5    # crypto risk ×0.5 from Saturday 00:00 to Monday 09:00 KST
+partial_r            = 0      # take partial profit at +2R → set 2 (0 = off; test with walk-forward first)
+partial_pct          = 50     # …selling this % of the position
+pyramid_r            = 0      # add to a winner at +1R once its stop is at break-even → set 1 (0 = off)
+pyramid_pct          = 50     # …adding this % of the original size, once per trade
+daily_loss_limit_pct = 3      # stop opening new trades for the day after this drawdown
+max_trades_per_day   = 10
+stop_loss_atr        = 2.0    # initial stop-loss distance in ATRs below entry
+trail_atr            = 3.0    # trailing stop: follows the highest price at this many ATRs below (0 = off)
+breakeven_r          = 1.0    # once up 1× the initial risk, move the stop to break-even (0 = off)
+take_profit_atr      = 0      # fixed take-profit in ATRs (0 = none — let the trailing stop ride winners)
+min_order_krw        = 5000   # Upbit minimum is ₩5,000
+
+[fees]                        # estimates, per side, in % — check your own fee schedule
+upbit  = 0.05
+kis_kr = 0.10                 # includes an allowance for the sell-side transaction tax
+kis_us = 0.25
+
+[risk.market_risk_mult]       # scale risk-per-trade by market (ATR sizing already shrinks jumpy assets;
+upbit  = 0.75                 #  this adds a margin for crypto's 24/7 gaps and weekend moves)
+kis_kr = 1.0
+kis_us = 1.0
+
+[correlation]                 # symbols that move together count as ONE bet
+groups = [["upbit:KRW-BTC", "upbit:KRW-ETH"], ["kis_kr:005930", "kis_kr:000660"]]
+max_per_group = 1
+
+[execution]
+avoid_open_minutes = 15       # no new stock buys in the first 15 min after the open (wild prices, wide spreads)
+max_spread_pct     = 0.3      # skip a buy if the bid-ask spread is wider than 0.3%
+kr_order_type      = "best_limit"  # KRX: 최유리지정가 (fills at the best price only) | "market"
+stale_seconds      = 300      # skip buys if the latest trade price is more than 5 min old
+us_retries         = 2        # unfilled US limit order: re-price twice…
+us_step_pct        = 0.5      # …0.5% further each time, then cancel whatever is left
+fast_stops         = true     # real-time stops: Upbit live price feed; stock positions every 10 s
+
+[alerts]                      # Telegram / KakaoTalk keys go in .env
+trades = true                 # message on every buy and sell
+stops  = true                 # message when a stop moves to break-even
+errors = true
+error_cooldown_minutes = 30   # repeat errors are sent at most this often
+summary_time = ""           # daily summary (Korea time); "" = off
+
+[monitor]
+auto_pause = true
+max_drawdown_pct  = 10        # pause new buys if equity falls 10% from its peak
+drift_min_trades  = 20        # after 20+ closed trades, check the last 20…
+min_profit_factor = 0.8       # …and pause if their profit factor drops below 0.8
+reconcile = true              # live mode: check bot positions against the broker every day at 10:00
+retest_day = 0                # re-run walk-forward tests on the 1st of each month (0 = off)
+retest_bars = 1500
+
+[shadow]                      # follow blocked setups as if taken, to measure each filter
+enabled = true
+track = ["ai_veto", "regime", "filtered"]
+max_days = 30
+
+[holidays]                    # one-off closures not in the calendars, as "YYYY-MM-DD"
+krx_extra = []
+us_extra = []
+
+[regime]                      # only BUY when the wider market is in an uptrend
+enabled = true
+ma      = 50                  # benchmark's last daily close must be above its 50-day average
+upbit   = "KRW-BTC"           # crypto benchmark
+kis_kr  = "069500"            # KODEX 200 ETF (tracks KOSPI 200)
+kis_us  = "SPY"               # S&P 500 ETF
+kis_us_exchange = "AMEX"      # SPY trades on NYSE Arca = KIS code AMEX
+
+[ai]
+enabled    = false            # Claude reviews every BUY before it is placed (it can only veto)
+model      = "claude-sonnet-5-5"
+web_search = true             # let Claude check recent news before approving
+fail_open  = false            # if Claude can't be reached: false = skip the buy, true = buy anyway
+min_confidence = 0.55         # approvals below this confidence are treated as rejections
+
+[signals]                     # market-condition filters — each can only block or shrink buys
+enabled = true
+vix = true                    # VIX "fear gauge" (FRED, daily) — stocks
+vix_max = 30
+vix_spike_pct = 20            # or a one-day jump of 20%+
+vix_action = "halve"          # "halve" stock position sizes, or "block" stock buys
+macro = true                  # no buys on FOMC decision, CPI and jobs-report days (built-in dates through 2027)
+macro_extra = []              # add more event dates "YYYY-MM-DD"
+etf_flows = true              # US spot Bitcoin ETF flows — data: The Commoner Bitcoin ETF Tracker by TFTC (CC BY 4.0)
+etf_outflow_musd = 500        # block crypto buys if the last 3 sessions lost more than $500M net
+funding = true                # BTC perpetual funding rate (Binance, Bybit fallback)
+funding_max_pct = 0.05        # per 8 hours; higher = longs crowded → block crypto buys
+coinbase_premium = true
+cb_premium_min_pct = -0.15    # Coinbase cheaper than Binance by more than this → US selling → block crypto buys
+upbit_premium = true
+upbit_premium_max_pct = 5.0   # Upbit pricier than global by more than this → Korea overheated → block Upbit buys
+fear_greed = true             # crypto Fear & Greed Index (data: Alternative.me) …
+fng_max = 80                  # …no crypto buys at 80+ ("extreme greed")
+krx_flows = true              # Korean stocks: foreigners + institutions must have been net BUYERS…
+krx_flow_days = 5             # …over the last 5 sessions (KIS investor data)
+earnings = true               # US stocks: no buys within 2 days of an earnings report (needs free FINNHUB_API_KEY)
+earnings_days = 2
+
+[ranking]                     # only buy the strongest few symbols
+enabled = true
+top_n = 3
+lookback_days = 63            # rank by ~3-month return of daily closes
+
+[allocation]                  # shift risk toward symbols that keep passing the monthly re-test
+enabled = false
+fail_mult = 0.5               # failed last re-test → half risk (0 = stop buying it)
+strong_mult = 1.25            # passed with profit factor ≥ strong_pf → 25% more risk
+strong_pf = 1.5
+
+[parking]                     # park spare KIS cash in a money-market ETF (KRX hours)
+enabled = false
+symbol = "459580"             # KODEX CD금리액티브(합성) — ~₩1.07M per share, so needs that much spare cash
+keep_cash_pct = 20            # always keep 20% of equity as cash (US buys happen while KRX is closed)
+
+[core]                        # dual momentum: a slow monthly "core" holding (needs KIS US trading)
+enabled = true
+pct = 30                      # share of the account in the core; swing trades size off the rest
+us = "SPY"                    # US stocks
+intl = "VEU"                  # international stocks
+bonds = "AGG"                 # bonds (when US stocks aren't beating cash)
+exchange = "AMEX"             # all three trade on NYSE Arca (KIS code AMEX)
+lookback_days = 120           # demo data is short — use 252 for real
+cash_return_pct = 4.0
+rebalance_band_pct = 10
+
+# Smart dollar-cost averaging — buy a fixed amount on a schedule; ×2 when RSI < 30, ×1.5 below the
+# 200-day average (max ×3). Uncomment to use.
+[[dca]]
+symbol = "KRW-BTC"
+market = "upbit"
+amount_krw = 100000
+every = "day"
+# [[dca]]
+# symbol = "SPY"
+# market = "kis_us"
+# exchange = "AMEX"
+# amount_krw = 300000
+# every = "month"
+# day = 5
+
+# Grid trading (Upbit only) — for a coin moving sideways. Buys each step down, sells one step up.
+# Stops and sells everything if the price falls stop_below_pct under the range. Uncomment to use.
+[[grid]]
+symbol = "KRW-XRP"
+lower = 2400
+upper = 3600
+levels = 12
+budget_krw = 1000000
+stop_below_pct = 8
+
+# Side-by-side paper accounts — same prices, different settings, no real orders, no alerts.
+# Compare them in Insights → "Side-by-side paper accounts".
+[[variants]]
+name = "no-claude"
+description = "Same rules, Claude review off"
+ai_enabled = false
+
+[[variants]]
+name = "tighter-stops"
+description = "Stops 1.5×ATR, trailing 2×ATR (Claude off — compare with no-claude)"
+ai_enabled = false
+risk = { stop_loss_atr = 1.5, trail_atr = 2.0 }
+
+# ── Watchlist ────────────────────────────────────────────────
+# market: "upbit" (crypto, 24/7) | "kis_kr" (KOSPI/KOSDAQ) | "kis_us" (US stocks)
+# interval: upbit → "60m", "240m", "day" ; kis_* → "day"
+# strategy: "trend_rsi" (trend-following) | "vol_breakout" (breakout) | "dip_buy" (buy dips in an uptrend)
+# params (optional): override strategy settings — paste what `python -m app.backtest --walkforward` recommends.
+#   trend_rsi:    fast=20, slow=50, long_ma=200, adx_min=20, vol_mult=1.2, rsi_max=70   (0 turns a filter off)
+#   vol_breakout: k=0.5, fast=20, vol_mult=1.5, min_progress=0.1
+#   dip_buy:      long_ma=200, rsi_len=2, rsi_entry=10, exit_ma=5, max_hold=10
+# enabled = false keeps a symbol listed but stops new buys (exits still run).
+# inverse = true marks an inverse ETF: bought only when the market regime is DOWN, sold when it turns up.
+#   e.g. symbol = "114800" (KODEX 인버스), market = "kis_kr", strategy = "trend_rsi", inverse = true
+#        symbol = "SH" (ProShares Short S&P 500), market = "kis_us", exchange = "AMEX", inverse = true
+# strategy = "auto" switches between trend_rsi (trending, ADX ≥ 20) and dip_buy (choppy) automatically.
+
+[[symbols]]
+symbol = "KRW-BTC"
+market = "upbit"
+interval = "60m"
+strategy = "vol_breakout"   # fires often — good for watching the demo
+
+[[symbols]]
+symbol = "KRW-ETH"
+market = "upbit"
+interval = "60m"
+strategy = "vol_breakout"
+
+[[symbols]]
+symbol = "005930"     # Samsung Electronics
+market = "kis_kr"
+interval = "day"
+strategy = "trend_rsi"
+
+[[symbols]]
+symbol = "AAPL"
+market = "kis_us"
+exchange = "NASD"     # NASD | NYSE | AMEX
+interval = "day"
+strategy = "trend_rsi"

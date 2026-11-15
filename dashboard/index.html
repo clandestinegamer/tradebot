@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg">
+<title>TradeBot</title>
+<style>
+  :root{--bg:#0d1117;--card:#161b22;--line:#262d36;--txt:#e6edf3;--mut:#8b949e;--up:#3fb950;--dn:#f85149;--acc:#58a6ff;--warn:#d29922}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font:15px/1.4 -apple-system,system-ui,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;padding:env(safe-area-inset-top) 0 calc(64px + env(safe-area-inset-bottom))}
+  header{display:flex;align-items:center;gap:8px;padding:14px 16px 6px}
+  header h1{font-size:18px;font-weight:650;flex:1}
+  .badge{font-size:11px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}
+  .badge.live{background:var(--dn);color:#fff;border-color:var(--dn)} .badge.paper{color:var(--acc);border-color:var(--acc)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--mut)}
+  .dot.ok{background:var(--up)} .dot.err{background:var(--dn)} .dot.paused{background:var(--warn)}
+  main{padding:4px 12px;display:flex;flex-direction:column;gap:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .card h2{font-size:12px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:flex;justify-content:space-between;gap:8px}
+  .card h2 span:last-child{text-transform:none;letter-spacing:0}
+  .big{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
+  .row{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:4px;font-size:14px;color:var(--mut)} .row b{font-weight:600}
+  .up{color:var(--up)} .dn{color:var(--dn)} .mut{color:var(--mut)} .warn{color:var(--warn)}
+  svg.spark{width:100%;height:70px;margin-top:10px;display:block} svg.chart{width:100%;height:120px;display:block;margin-top:8px}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  button{font:inherit;font-weight:600;border-radius:10px;border:1px solid var(--line);background:#21262d;color:var(--txt);padding:12px;cursor:pointer}
+  button:active{transform:scale(.98)} button.small{padding:6px 10px;font-size:13px}
+  button.danger{background:transparent;border-color:var(--dn);color:var(--dn)}
+  button.primary{background:var(--acc);border-color:var(--acc);color:#04111f}
+  .item{padding:10px 0;border-top:1px solid var(--line)} .item:first-of-type{border-top:0;padding-top:0}
+  .item .top{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:600}
+  .item .sub{font-size:13px;color:var(--mut);margin-top:2px}
+  .tag{font-size:11px;font-weight:700;padding:1px 6px;border-radius:5px;margin-right:6px}
+  .tag.BUY{background:#1a3a24;color:var(--up)} .tag.SELL{background:#3d1d1f;color:var(--dn)} .tag.veto{background:#3a2e12;color:var(--warn)}
+  .empty{color:var(--mut);font-size:14px}
+  nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#0d1117ee;backdrop-filter:blur(8px);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  nav button{flex:1;background:none;border:0;border-radius:0;color:var(--mut);padding:14px 2px;font-size:12.5px}
+  nav button.on{color:var(--acc)}
+  .tab{display:none} .tab.on{display:flex;flex-direction:column;gap:12px}
+  #login{max-width:380px;margin:16vh auto 0;padding:0 16px;display:none}
+  input,select{font:inherit;width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:#0d1117;color:var(--txt);margin:6px 0}
+  .err{color:var(--dn);font-size:13px;margin-top:6px;word-break:break-word} .ok{color:var(--up);font-size:13px;margin-top:6px}
+  .kill{display:none;margin-top:10px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:13px} .grid2 span:nth-child(odd){color:var(--mut)}
+  .field{display:grid;grid-template-columns:1fr 92px;align-items:center;gap:8px;font-size:14px;padding:4px 0}
+  .field small{display:block;color:var(--mut);font-size:12px}
+  .field input{margin:0;text-align:right}
+  .switch{display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:14px}
+  .switch input{width:auto;margin:0;transform:scale(1.3)}
+  details summary{cursor:pointer;color:var(--acc);font-size:14px;margin-top:6px}
+  .pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--mut);margin-left:6px;font-weight:600}
+  .pill.pass{border-color:var(--up);color:var(--up)} .pill.fail{border-color:var(--dn);color:var(--dn)}
+</style>
+</head>
+<body>
+<section id="login">
+  <h1 style="font-size:22px">TradeBot</h1>
+  <p class="mut" style="margin-top:6px">Sign in to this device.</p>
+  <input id="tok" type="password" autocomplete="current-password" placeholder="Dashboard password">
+  <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code from your authenticator app" style="display:none">
+  <button class="primary" style="width:100%;margin-top:6px" onclick="doLogin()">Sign in</button>
+  <div class="err" id="loginErr"></div>
+</section>
+
+<div id="app" style="display:none">
+<header><span class="dot" id="dot"></span><h1>TradeBot</h1><span class="badge" id="mode">—</span></header>
+<main>
+  <!-- OVERVIEW -->
+  <section class="tab on" id="t-home">
+    <div class="card">
+      <h2><span>Equity</span><span id="tick"></span></h2>
+      <div class="big" id="equity">—</div>
+      <div class="row"><span>Today <b id="day">—</b></span><span>Total <b id="total">—</b></span><span>From peak <b id="dd">—</b></span><span>Cash <b id="cash">—</b></span></div>
+      <div class="row"><span>Open risk <b id="orisk">—</b></span><span>In USD <b id="usd">—</b></span><span>FX effect <b id="fxe">—</b></span></div>
+      <svg class="spark" id="spark" viewBox="0 0 300 70" preserveAspectRatio="none"></svg>
+      <div class="err" id="lastErr"></div>
+    </div>
+    <div class="card">
+      <h2><span>Controls</span><span id="ai"></span></h2>
+      <div class="btns">
+        <button id="pauseBtn" onclick="togglePause()">Pause</button>
+        <button onclick="post('/api/tick').then(()=>setTimeout(load,1500))">Check now</button>
+      </div>
+      <button class="danger" style="width:100%;margin-top:8px" onclick="$('kill').style.display='block'">Kill switch — sell everything</button>
+      <div class="kill" id="kill">
+        <p class="mut" style="font-size:13px">Sells every open position at market and pauses the bot. Type <b>SELL ALL</b> to confirm.</p>
+        <input id="killTxt" autocomplete="off" placeholder="SELL ALL">
+        <button class="danger" style="width:100%" onclick="kill()">Confirm</button>
+        <div class="err" id="killMsg"></div>
+      </div>
+    </div>
+    <div class="card"><h2><span>Market conditions</span><span id="wknd"></span></h2><div id="conds"></div></div>
+    <div class="card"><h2><span>Open positions</span><span id="npos"></span></h2><div id="positions"></div></div>
+    <div class="card" id="ltCard" style="display:none"><h2><span>Long-term holdings</span></h2><div id="lt"></div></div>
+    <div class="card"><h2><span>Watchlist</span><span id="regime"></span></h2><div id="watch"></div></div>
+  </section>
+
+  <!-- JOURNAL -->
+  <section class="tab" id="t-trades"><div class="card"><h2><span>Trade journal</span><span class="mut">tap a trade for its chart</span></h2><div id="journal"></div></div>
+    <div class="card"><h2>All orders</h2><div id="trades"></div></div></section>
+
+  <!-- SIGNALS -->
+  <section class="tab" id="t-signals"><div class="card"><h2>Signals &amp; decisions</h2><div id="signals"></div></div></section>
+
+  <!-- INSIGHTS -->
+  <section class="tab" id="t-insights">
+    <div class="card"><h2>Ask Claude about your bot</h2>
+      <input id="askQ" placeholder="e.g. Why did you buy NVDA? What's my worst symbol this month?">
+      <button class="primary" style="width:100%" onclick="askClaude()">Ask</button>
+      <div id="askA" style="white-space:pre-wrap;font-size:14px;margin-top:10px"></div></div>
+    <div class="card"><h2><span>Claude's weekly review</span><button class="small" onclick="reviewNow()">Write one now</button></h2><div id="review" style="white-space:pre-wrap;font-size:14px"></div></div>
+    <div class="card"><h2>Worst-case outlook</h2><div id="mc"></div></div>
+    <div class="card" id="cmpCard" style="display:none"><h2><span>Side-by-side paper accounts</span><span>swing-trade P&amp;L</span></h2><div id="cmp"></div></div>
+    <div class="card"><h2>Are the filters earning their keep?</h2>
+      <p class="mut" style="font-size:13px;margin-bottom:8px">Every blocked setup is followed as if it had been taken. Results in R (1R = the amount a trade risks).</p>
+      <div id="shadow"></div></div>
+    <div class="card"><h2>Execution quality</h2><div class="grid2" id="exec"></div></div>
+    <div class="card"><h2><span>Monthly strategy re-test</span><button class="small" onclick="retestNow()">Run now</button></h2><div id="retest"></div><div class="ok" id="retestMsg"></div></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="tab" id="t-settings">
+    <div class="card"><h2><span>Risk limits</span><span id="saveMsg"></span></h2><div id="riskForm"></div>
+      <div class="switch"><span>Market-regime filter</span><input type="checkbox" id="sw_regime"></div>
+      <div class="switch"><span>Claude reviews buys</span><input type="checkbox" id="sw_ai"></div>
+      <div class="switch"><span>Market-condition filters (VIX, Fed days, ETF flows…)</span><input type="checkbox" id="sw_sig"></div>
+      <div class="switch"><span>Only buy the top-ranked symbols</span><input type="checkbox" id="sw_rank"></div>
+      <button class="primary" style="width:100%;margin-top:8px" onclick="saveRisk()">Save risk settings</button>
+      <div class="err" id="riskErr"></div></div>
+    <div class="card"><h2>Watchlist</h2><div id="symForm"></div>
+      <details><summary>Add a symbol</summary>
+        <input id="ns_symbol" placeholder="Symbol (e.g. KRW-SOL, 000660, MSFT)">
+        <select id="ns_market"><option value="upbit">Upbit (crypto)</option><option value="kis_kr">KRX (Korean stock)</option><option value="kis_us">US stock</option></select>
+        <select id="ns_strategy"><option value="trend_rsi">trend_rsi</option><option value="vol_breakout">vol_breakout</option><option value="dip_buy">dip_buy</option><option value="auto">auto (switches trend/dip by market type)</option></select>
+        <select id="ns_interval"><option value="day">day</option><option value="60m">60m (Upbit only)</option><option value="240m">240m (Upbit only)</option></select>
+        <select id="ns_exchange"><option value="NASD">NASDAQ</option><option value="NYSE">NYSE</option><option value="AMEX">AMEX / Arca</option></select>
+        <div class="switch"><span>Inverse ETF (only bought when the market is falling)</span><input type="checkbox" id="ns_inverse"></div>
+        <button style="width:100%" onclick="addSymbol()">Add</button>
+      </details>
+      <div class="err" id="symErr"></div></div>
+    <div class="card"><h2>Alerts &amp; checks</h2>
+      <div class="grid2" id="alertInfo"></div>
+      <div class="btns" style="margin-top:10px"><button class="small" onclick="testAlert()">Send test alert</button><button class="small" onclick="reconcile()">Check positions vs broker</button></div>
+      <div class="ok" id="alertMsg"></div></div>
+    <div class="card"><h2>Tax export</h2>
+      <p class="mut" style="font-size:13px">Closed trades with cost basis and gains in KRW and USD (exchange rate on each trade date). Have a tax professional review it.</p>
+      <div class="btns" style="margin-top:8px"><select id="taxYear"></select><button onclick="exportTax()">Download CSV</button></div>
+      <div id="taxReview" style="margin-top:10px"></div></div>
+    <div class="card"><h2>Backups</h2><p class="mut" style="font-size:13px">Nightly at 03:00 KST (last 14 kept; sent to Telegram if set up).</p>
+      <button class="small" style="margin-top:8px" onclick="backupNow()">Back up now</button><div class="ok" id="backupMsg"></div></div>
+    <div class="card"><h2><span>Signed-in devices</span><span id="tfa"></span></h2><div id="sessions"></div>
+      <button class="small danger" style="margin-top:8px" onclick="revokeOthers()">Sign out all other devices</button></div>
+    <div class="card" id="appCard" style="display:none"><h2>Android app</h2>
+      <div class="item"><div class="top"><span>Server</span><span class="mut" id="appServer"></span></div></div>
+      <div class="item"><div class="top"><span>Fingerprint / PIN lock</span><button class="small" id="appLockBtn" onclick="toggleAppLock()"></button></div>
+        <div class="sub">Asks for your fingerprint or screen lock each time the app opens.</div></div>
+      <button class="small" style="margin-top:8px" onclick="TradeBotApp.changeServer()">Change server</button></div>
+    <button onclick="logout()">Sign out this device</button>
+  </section>
+</main>
+<nav>
+  <button class="on" data-t="home">Overview</button><button data-t="trades">Journal</button>
+  <button data-t="signals">Signals</button><button data-t="insights">Insights</button><button data-t="settings">Settings</button>
+</nav>
+</div>
+
+<script>
+let SID = null, ST = null, SET = null;
+try { SID = localStorage.getItem('tb_session'); } catch (e) {}
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const won = v => v == null ? '—' : (v < 0 ? '-₩' : '₩') + Math.abs(Math.round(v)).toLocaleString('en-US');
+const pct = v => v == null ? '—' : (v >= 0 ? '+' : '') + (+v).toFixed(2) + '%';
+const cls = v => v > 0 ? 'up' : v < 0 ? 'dn' : '';
+const num = v => v == null ? '—' : (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString('en-US') : (+v).toLocaleString('en-US', {maximumFractionDigits: 4}));
+const ago = iso => { if (!iso) return 'never'; const s = (Date.now() - new Date(iso)) / 1000; return s < 60 ? Math.round(s) + 's ago' : s < 3600 ? Math.round(s/60) + 'm ago' : new Date(iso).toLocaleString(); };
+const when = iso => iso ? new Date(iso).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '—';
+const MKT = {upbit: 'Upbit', kis_kr: 'KRX', kis_us: 'US'};
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, {...opts, headers: {'Authorization': 'Bearer ' + SID, 'Content-Type': 'application/json', ...(opts.headers || {})}});
+  if (r.status === 401) { showLogin('Please sign in.'); throw new Error('auth'); }
+  if (opts.raw) { if (!r.ok) throw new Error(r.statusText); return r; }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail || r.statusText);
+  return d;
+}
+const post = (p, body) => api(p, {method: 'POST', body: body ? JSON.stringify(body) : undefined});
+
+async function showLogin(msg) {
+  $('app').style.display = 'none'; $('login').style.display = 'block'; $('loginErr').textContent = msg || '';
+  try { const i = await (await fetch('/api/login-info')).json(); $('code').style.display = i.two_step ? 'block' : 'none'; } catch (e) {}
+}
+async function doLogin() {
+  const device = (window.TradeBotApp ? 'TradeBot app · ' : '') + (navigator.userAgentData && navigator.userAgentData.platform ? navigator.userAgentData.platform + ' · ' : '') + (/Android/.test(navigator.userAgent) ? 'Android phone' : navigator.platform || 'browser');
+  const r = await fetch('/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({token: $('tok').value.trim(), code: $('code').value.trim(), device})});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { $('loginErr').textContent = d.detail || 'Sign-in failed'; return; }
+  SID = d.session; try { localStorage.setItem('tb_session', SID); } catch (e) {}
+  $('tok').value = $('code').value = ''; start();
+}
+async function logout() { try { await post('/api/logout'); } catch (e) {} try { localStorage.removeItem('tb_session'); } catch (e) {} SID = null; showLogin(); }
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.id === 't-' + b.dataset.t));
+  load(true);
+});
+
+function line(svg, vals, marks = []) {
+  if (!vals || vals.length < 2) { svg.innerHTML = '<text x="0" y="40" fill="#8b949e" font-size="11">not enough data yet</text>'; return; }
+  const W = 300, H = svg.viewBox.baseVal.height, lo = Math.min(...vals), hi = Math.max(...vals), sp = (hi - lo) || 1;
+  const X = i => (i / (vals.length - 1) * W).toFixed(1), Y = v => (H - 4 - (v - lo) / sp * (H - 10)).toFixed(1);
+  const col = vals[vals.length - 1] >= vals[0] ? 'var(--up)' : 'var(--dn)';
+  svg.innerHTML = `<polyline points="${vals.map((v, i) => X(i) + ',' + Y(v)).join(' ')}" fill="none" stroke="${marks.length ? '#8b949e' : col}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>` +
+    marks.filter(m => m.i != null).map(m => `<circle cx="${X(m.i)}" cy="${Y(vals[m.i])}" r="4" fill="${m.c}"/><text x="${Math.min(+X(m.i) + 5, 270)}" y="${Math.max(+Y(vals[m.i]) - 6, 10)}" fill="${m.c}" font-size="10">${m.t}</text>`).join('');
+}
+
+function render(s) {
+  ST = s;
+  const m = $('mode'); m.textContent = s.mode === 'live' ? ('LIVE' + (s.live_capital_krw ? ' · ' + won(s.live_capital_krw) + ' cap' : '')) : (s.data_source === 'demo' ? 'PAPER · DEMO DATA' : 'PAPER'); m.className = 'badge ' + s.mode;
+  $('dot').className = 'dot ' + (s.last_error ? 'err' : s.paused ? 'paused' : 'ok');
+  $('tick').textContent = 'checked ' + ago(s.last_tick);
+  $('equity').textContent = won(s.equity_krw);
+  $('day').textContent = pct(s.day_pnl_pct); $('day').className = cls(s.day_pnl_pct);
+  $('total').textContent = pct(s.total_pnl_pct); $('total').className = cls(s.total_pnl_pct);
+  $('dd').textContent = s.drawdown_pct ? '-' + (+s.drawdown_pct).toFixed(1) + '%' : '0%'; $('dd').className = s.drawdown_pct > 5 ? 'dn' : '';
+  $('cash').textContent = won(s.cash_krw);
+  $('orisk').textContent = (+s.open_risk_pct).toFixed(1) + '%';
+  $('usd').textContent = s.usd ? (+s.usd.pct_of_equity).toFixed(0) + '%' : '—';
+  $('fxe').textContent = s.usd ? won(s.usd.fx_effect_krw) : '—'; $('fxe').className = s.usd ? cls(s.usd.fx_effect_krw) : '';
+  $('lastErr').textContent = s.last_error ? '⚠ ' + s.last_error : '';
+  $('pauseBtn').textContent = s.paused ? 'Resume' : 'Pause'; $('pauseBtn').className = s.paused ? 'primary' : '';
+  $('ai').innerHTML = s.ai_active ? '<span class="up">Claude review on</span>' : (s.ai_enabled ? '<span class="dn">AI key missing</span>' : 'AI review off');
+  const swing = s.positions.filter(p => !/^(core|dca|grid):/.test(p.key));
+  $('npos').textContent = swing.length;
+  $('positions').innerHTML = swing.length ? swing.map(p => `
+    <div class="item"><div class="top"><span>${esc(p.symbol)} <span class="mut" style="font-weight:400">${MKT[p.market]}</span></span><span class="${cls(p.pnl_pct)}">${pct(p.pnl_pct)}</span></div>
+      <div class="sub">${num(p.qty)} @ ${num(p.avg_price)} → ${num(p.price)} · ${won(p.pnl_krw)}</div>
+      <div class="sub">${p.initial_stop && p.stop > p.initial_stop ? (p.stop >= p.avg_price ? '🔒 trailing stop ' : '↑ stop ') : 'stop '}${num(p.stop)}${p.target > 0 ? ' · target ' + num(p.target) : ''}${p.highest ? ' · high ' + num(p.highest) : ''}</div></div>`).join('') : '<div class="empty">No open positions.</div>';
+  const rg = Object.entries(s.regime.status).filter(([k, v]) => v);
+  $('regime').innerHTML = !s.regime.enabled ? 'market filter off' : rg.length ? rg.map(([k, v]) => `<span class="${/above/.test(v) ? 'up' : 'dn'}">${MKT[k]} ${/above/.test(v) ? '▲' : '▼'}</span>`).join(' ') : '';
+  $('watch').innerHTML = s.watchlist.map(w => `
+    <div class="item"><div class="top"><span>${esc(w.symbol)} <span class="mut" style="font-weight:400">${MKT[w.market]} · ${esc(w.interval)}</span>${w.enabled ? '' : '<span class="pill">off</span>'}${w.inverse ? '<span class="pill">inverse</span>' : ''}${w.retest && w.retest.pass != null ? `<span class="pill ${w.retest.pass ? 'pass' : 'fail'}">${w.retest.pass ? 'passes test' : 'fails test'}</span>` : ''}</span>
+      <span>${num(w.price)}</span></div>
+      <div class="sub">${esc(w.strategy)} · ${w.open ? '<span class="up">market open</span>' : 'market closed'}</div></div>`).join('');
+}
+
+const COND = {vix: 'VIX (US fear gauge)', macro: 'Fed / CPI / jobs days', etf_flows: 'Bitcoin ETF flows', funding: 'Crypto funding rate', cb_premium: 'Coinbase premium', upbit_premium: 'Upbit premium', fear_greed: 'Crypto Fear & Greed'};
+async function renderConditions() {
+  const c = await api('/api/conditions');
+  if (!c.enabled) { $('conds').innerHTML = '<div class="empty">Market-condition filters are off.</div>'; return; }
+  $('conds').innerHTML = Object.entries(COND).map(([k, label]) => { const r = c[k]; if (!r || r.state === 'off') return '';
+    const col = r.state === 'caution' ? 'warn' : r.state === 'unavailable' ? 'mut' : 'up', icon = r.state === 'caution' ? (r.action === 'halve' ? '½' : '⛔') : r.state === 'unavailable' ? '?' : '✓';
+    return `<div class="item"><div class="top"><span>${label}</span><span class="${col}">${icon}</span></div><div class="sub">${esc(r.detail)}</div></div>`; }).join('');
+  $('wknd').innerHTML = ST.weekend_crypto ? '<span class="warn">weekend: crypto size reduced</span>' : '';
+}
+async function renderLongTerm() {
+  const l = await api('/api/longterm');
+  const show = l.held.length || l.core.enabled || l.dca.length || l.grids.length;
+  $('ltCard').style.display = show ? 'block' : 'none'; if (!show) return;
+  const kind = k => ({core: 'Core', dca: 'DCA', grid: 'Grid'})[k.split(':')[0]];
+  let h = l.held.map(p => `<div class="item"><div class="top"><span>${esc(p.symbol)} <span class="pill">${kind(p.key)}</span></span><span class="${cls(p.price - p.avg_price)}">${pct((p.price / p.avg_price - 1) * 100)}</span></div>
+    <div class="sub">${num(p.qty)} @ ${num(p.avg_price)} · ${won(p.value_krw)}</div></div>`).join('');
+  if (l.core.enabled) h += `<div class="item"><div class="sub">Core (${l.core.pct}% of account): ${l.core.last ? `holding <b>${esc(l.core.last.pick)}</b> since check on ${l.core.last.date} · 12-mo ${Object.entries(l.core.last.returns_12m).map(([k, v]) => k + ' ' + pct(v)).join(', ')}` : 'first check at the next US market open'}</div></div>`;
+  h += l.dca.map(d => `<div class="item"><div class="sub">DCA ${esc(d.symbol)}: ${won(d.amount_krw)} every ${d.every} (more on dips) · last ${d.last_period || 'not yet'}</div></div>`).join('');
+  h += l.grids.map(g => { const s = g.state || {}; return `<div class="item"><div class="sub">Grid ${esc(g.symbol)} ${num(g.lower)}–${num(g.upper)} × ${g.levels} · ${s.stopped ? '<b class="dn">stopped</b>' : Object.keys(s.lots || {}).length + ' step(s) filled'}</div></div>`; }).join('');
+  $('lt').innerHTML = h;
+}
+async function askClaude() {
+  const q = $('askQ').value.trim(); if (!q) return; $('askA').textContent = 'Thinking…';
+  try { $('askA').textContent = (await post('/api/ask', {question: q})).answer; } catch (e) { $('askA').textContent = e.message; }
+}
+async function reviewNow() { $('review').textContent = 'Claude is writing your review…'; try { const r = await post('/api/review'); $('review').textContent = r.date + '\n\n' + r.text; } catch (e) { $('review').textContent = e.message; } }
+async function renderInsights() {
+  const rv = await api('/api/review'); $('review').textContent = rv.text ? rv.date + '\n\n' + rv.text : 'The first review arrives Sunday at 20:00 KST (needs ANTHROPIC_API_KEY).';
+  const mc = await api('/api/montecarlo');
+  $('mc').innerHTML = mc.error ? `<div class="empty">Needs at least 10 closed trades (have ${mc.trades}). Until then: <code>python -m app.backtest --walkforward --montecarlo</code></div>` :
+    `<p class="mut" style="font-size:13px;margin-bottom:8px">${mc.sims.toLocaleString()} random re-orderings of your ${mc.trades} trades.</p><div class="grid2">` +
+    [['Result (unlucky / typical)', pct(mc.final_return_pct.bad_5pct) + ' / ' + pct(mc.final_return_pct.median)], ['Worst drop (typical)', mc.max_drawdown_pct.median.toFixed(1) + '%'],
+     ['Worst drop (1 in 20)', mc.max_drawdown_pct.bad_5pct.toFixed(1) + '%'], ['Losing streak (unlucky)', mc.losing_streak.bad_5pct + ' in a row'],
+     [`Chance of a ${mc.pain_pct}% drop`, mc.chance_of_drawdown_beyond_pct.toFixed(1) + '%'], ['Chance of ending down', mc.chance_of_loss_pct.toFixed(1) + '%']]
+     .map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('') + '</div>';
+  const vs = await api('/api/variants');
+  $('cmpCard').style.display = vs.length > 1 ? 'block' : 'none';
+  if (vs.length > 1) $('cmp').innerHTML = vs.map(v => v.error ? `<div class="item"><div class="top"><span>${esc(v.name)}</span><span class="dn">error</span></div></div>` : `<div class="item"><div class="top"><span>${esc(v.name)}</span><span class="${cls(v.swing_pnl_krw)}">${won(v.swing_pnl_krw)} (${pct(v.swing_pnl_pct)})</span></div>
+    <div class="sub">${esc(v.description)}</div><div class="sub">${v.closed_trades} closed · win ${v.win_rate == null ? '—' : Math.round(v.win_rate) + '%'} · PF ${v.profit_factor == null ? '—' : v.profit_factor.toFixed(2)} · max DD ${(+v.max_drawdown_pct).toFixed(1)}% · ${v.open_positions} open</div></div>`).join('');
+  const sh = await api('/api/shadow');
+  $('shadow').innerHTML = Object.values(sh.summary).map(x => `
+    <div class="item"><div class="top"><span>${esc(x.label)}</span><span class="${x.total_r < 0 ? 'up' : x.total_r > 0 ? 'dn' : ''}">${x.closed ? (x.total_r > 0 ? '+' : '') + x.total_r + 'R' : '—'}</span></div>
+      <div class="sub">${esc(x.verdict)}</div>
+      <div class="sub">${x.closed} finished · ${x.open} still open${x.closed ? ` · would-be win rate ${x.win_rate}% · avg ${x.avg_r}R` : ''}</div></div>`).join('');
+  const s = ST;
+  $('exec').innerHTML = [['Avg slippage (last 50)', s.avg_slippage_pct == null ? '—' : s.avg_slippage_pct.toFixed(3) + '%'],
+    ['Recent profit factor', s.recent_profit_factor ?? '— (needs 20 trades)'], ['Drawdown from peak', (+s.drawdown_pct || 0).toFixed(1) + '%'],
+    ['Real-time stops', s.fast_stops || 'off'],
+    ['Last backup', s.backup_last ? s.backup_last.ts.slice(0, 16).replace('T', ' ') + ' · ' + (s.backup_last.shipped.join(', ') || 'on server only') : 'not yet (03:00 KST nightly)'],
+    ['Guardian (2nd machine)', s.guardian_seen ? 'checked in ' + ago(s.guardian_seen) : 'not set up'],
+    ['Position check', s.reconcile ? (s.reconcile.problems.length ? '⚠ ' + s.reconcile.problems.length + ' problem(s)' : 'OK ' + when(s.reconcile.ts)) : (s.mode === 'live' ? 'not run yet' : 'live mode only')]]
+    .map(([a, b]) => `<span>${a}</span><span>${esc(b)}</span>`).join('');
+  $('retest').innerHTML = s.watchlist.map(w => { const r = w.retest; return `<div class="item"><div class="top"><span>${esc(w.symbol)}</span>${r ? (r.error ? '<span class="dn">error</span>' : `<span class="pill ${r.pass ? 'pass' : 'fail'}">${r.pass ? 'PASS' : 'FAIL'}</span>`) : '<span class="mut">not tested yet</span>'}</div>
+    ${r && !r.error ? `<div class="sub">${r.date}: unseen ${pct(r.oos_return_pct)} vs hold ${pct(r.hold_same_size_pct)} · ${r.trades} trades · PF ${r.profit_factor ?? '∞'}</div>${(r.notes || []).map(n => `<div class="sub">• ${esc(n)}</div>`).join('')}${r.recommended_params ? `<div class="sub">suggested: ${esc(JSON.stringify(r.recommended_params))}</div>` : ''}` : r && r.error ? `<div class="sub">${esc(r.error)}</div>` : ''}</div>`; }).join('');
+}
+
+async function renderSettings() {
+  SET = await api('/api/settings');
+  const labels = {max_position_pct: ['Max per position', '% of equity'], risk_per_trade_pct: ['Risk per trade', '% lost if the stop hits'],
+    max_open_positions: ['Max open positions', ''], daily_loss_limit_pct: ['Daily loss stop', '% — no new buys after'],
+    max_trades_per_day: ['Max buys per day', ''], stop_loss_atr: ['Initial stop', '× ATR below entry'],
+    trail_atr: ['Trailing stop', '× ATR below high (0 = off)'], breakeven_r: ['Break-even at', '+R (0 = off)'], take_profit_atr: ['Take-profit', '× ATR (0 = none)'],
+    max_total_risk_pct: ['Total risk cap', '% lost if every stop hit (0 = off)'], weekend_crypto_mult: ['Weekend crypto size', '× normal, Sat–Mon 09:00 KST'],
+    partial_r: ['Partial profit at', '+R (0 = off)'], partial_pct: ['…selling', '% of the position'],
+    pyramid_r: ['Add to winners at', '+R, stop at break-even (0 = off)'], pyramid_pct: ['…adding', '% of the original size']};
+  $('riskForm').innerHTML = Object.entries(SET.risk).map(([k, v]) => `<div class="field"><span>${labels[k][0]}<small>${labels[k][1]} · ${SET.ranges[k][0]}–${SET.ranges[k][1]}</small></span><input type="number" step="any" id="r_${k}" value="${v}"></div>`).join('');
+  $('sw_regime').checked = SET.regime_enabled; $('sw_ai').checked = SET.ai_enabled;
+  $('sw_sig').checked = SET.signals_enabled; $('sw_rank').checked = SET.ranking_enabled;
+  $('symForm').innerHTML = SET.symbols.map((s, i) => `<div class="item"><div class="top"><span>${esc(s.symbol)} <span class="mut" style="font-weight:400">${MKT[s.market]} · ${esc(s.strategy)} · ${esc(s.interval)}</span></span>
+      <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleSym(${i}, this.checked)" style="width:auto;transform:scale(1.3)"></div>
+      <div class="sub">${Object.keys(s.params || {}).length ? 'params ' + esc(JSON.stringify(s.params)) : 'default settings'} ${SET.held.includes(s.market + ':' + s.symbol) ? '· <b>position open</b>' : `· <a href="#" style="color:var(--dn)" onclick="removeSym(${i});return false">remove</a>`}</div></div>`).join('');
+  const s = ST;
+  $('alertInfo').innerHTML = [['Alert channels', s.alert_channels.length ? s.alert_channels.join(', ') : 'none set up'], ['Two-step login', s.two_step ? 'on' : 'OFF']].map(([a, b]) => `<span>${a}</span><span class="${/none|OFF/.test(b) ? 'warn' : ''}">${b}</span>`).join('');
+  $('tfa').innerHTML = s.two_step ? '<span class="up">2-step on</span>' : '<span class="warn">2-step off</span>';
+  const y = new Date().getFullYear(); $('taxYear').innerHTML = [y, y - 1, y - 2].map(v => `<option>${v}</option>`).join('') + '<option value="">All years</option>';
+  const tr = await api('/api/tax/review');
+  $('taxReview').innerHTML = `<div class="sub">Realized in ${tr.year}: <b class="${cls(tr.realized_ytd_krw)}">${won(tr.realized_ytd_krw)}</b> (${tr.realized_ytd_usd >= 0 ? '+' : ''}$${Math.abs(tr.realized_ytd_usd).toLocaleString()}) · ${tr.closed_trades} closed trades</div>` +
+    (tr.candidates.length ? '<div class="sub" style="margin-top:6px"><b>Open positions at a loss</b> (could offset gains if sold before Dec 31):</div>' + tr.candidates.map(c => `<div class="sub">• ${esc(c.symbol)} (${c.kind}) ${won(c.unrealized_krw)} · ${c.held_days ?? '?'} days held</div>`).join('') : '<div class="sub">No open positions at a loss.</div>') +
+    `<div class="sub" style="margin-top:6px;font-size:12px">${esc(tr.note)}</div>`;
+  renderAppCard();
+  const ss = await api('/api/sessions');
+  $('sessions').innerHTML = ss.map(x => `<div class="item"><div class="top"><span>${esc(x.device)}${x.current ? ' <span class="pill pass">this device</span>' : ''}</span>${x.current ? '' : `<button class="small" onclick="revoke('${x.id}')">Sign out</button>`}</div><div class="sub">${esc(x.ip)} · last used ${when(x.last_seen)}</div></div>`).join('');
+}
+
+async function saveSettings(body, errEl) {
+  try { await post('/api/settings', body); $('saveMsg').innerHTML = '<span class="up">saved</span>'; $(errEl).textContent = ''; await renderSettings(); setTimeout(() => $('saveMsg').textContent = '', 2500); }
+  catch (e) { $(errEl).textContent = e.message; }
+}
+function saveRisk() { const risk = {}; Object.keys(SET.risk).forEach(k => risk[k] = parseFloat($('r_' + k).value)); saveSettings({risk, regime_enabled: $('sw_regime').checked, ai_enabled: $('sw_ai').checked,
+  signals_enabled: $('sw_sig').checked, ranking_enabled: $('sw_rank').checked}, 'riskErr'); }
+function toggleSym(i, on) { const syms = SET.symbols.map(s => ({...s})); syms[i].enabled = on; saveSettings({symbols: syms}, 'symErr'); }
+function removeSym(i) { if (!confirm('Remove ' + SET.symbols[i].symbol + ' from the watchlist?')) return; const syms = SET.symbols.filter((_, j) => j !== i); saveSettings({symbols: syms}, 'symErr'); }
+function addSymbol() {
+  const market = $('ns_market').value, sym = {symbol: $('ns_symbol').value.trim().toUpperCase(), market, strategy: $('ns_strategy').value,
+    interval: market === 'upbit' ? $('ns_interval').value : 'day', exchange: $('ns_exchange').value, params: {}, enabled: true, inverse: $('ns_inverse').checked};
+  if (!sym.symbol) return; saveSettings({symbols: [...SET.symbols, sym]}, 'symErr'); $('ns_symbol').value = '';
+}
+async function backupNow() { try { const r = await post('/api/backup'); $('backupMsg').textContent = `${r.file} (${r.size_kb} KB) — ${r.shipped.join(', ') || 'kept on the server'}`; } catch (e) { $('backupMsg').textContent = e.message; } }
+async function revoke(id) { await api('/api/sessions/' + id, {method: 'DELETE'}); renderSettings(); }
+async function revokeOthers() { await post('/api/sessions/revoke-others'); renderSettings(); }
+async function testAlert() { try { const r = await post('/api/alerts/test'); $('alertMsg').textContent = 'Sent via ' + r.sent_via.join(', '); } catch (e) { $('alertMsg').textContent = e.message; } }
+async function reconcile() { const r = await post('/api/reconcile'); $('alertMsg').textContent = r.note || (r.problems.length ? '⚠ ' + r.problems.join('; ') : 'Positions match the broker ✓'); }
+async function retestNow() { const r = await post('/api/retest'); $('retestMsg').textContent = r.started ? 'Re-test started — results arrive here and as an alert (can take a few minutes).' : 'A re-test is already running.'; }
+async function exportTax() {
+  const y = $('taxYear').value, r = await api('/api/export/tax.csv' + (y ? '?year=' + y : ''), {raw: true});
+  const name = `tradebot-trades-${y || 'all'}.csv`, blob = await r.blob();
+  if (window.TradeBotApp) { // Android app: blob links don't download inside the app, so hand the file to it
+    const b64 = await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
+    TradeBotApp.saveFile(name, 'text/csv', b64); return;
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+}
+function renderAppCard() {
+  if (!window.TradeBotApp) return;
+  $('appCard').style.display = ''; $('appServer').textContent = TradeBotApp.server();
+  $('appLockBtn').textContent = TradeBotApp.lockEnabled() ? 'On — turn off' : 'Off — turn on';
+}
+function toggleAppLock() { TradeBotApp.setLockEnabled(!TradeBotApp.lockEnabled()); renderAppCard(); }
+async function showChart(id) {
+  const box = $('chart-' + id); if (box.dataset.loaded) { box.style.display = box.style.display === 'none' ? 'block' : 'none'; return; }
+  box.innerHTML = '<div class="sub">loading…</div>';
+  try { const c = await api(`/api/journal/${id}/chart`); box.innerHTML = '<svg class="chart" viewBox="0 0 300 120" preserveAspectRatio="none"></svg>' + (c.entry_i == null ? '<div class="sub">entry is older than the loaded candles</div>' : '');
+    line(box.querySelector('svg'), c.close, [{i: c.entry_i, c: 'var(--up)', t: 'buy'}, {i: c.exit_i, c: 'var(--dn)', t: 'sell'}]); box.dataset.loaded = 1; }
+  catch (e) { box.innerHTML = `<div class="sub">${esc(e.message)}</div>`; }
+}
+
+async function load(tabChanged) {
+  if (!SID) return showLogin();
+  try {
+    const tab = document.querySelector('nav button.on').dataset.t;
+    render(await api('/api/status'));
+    if (tab === 'home') {
+      line($('spark'), (await api('/api/equity?days=7')).map(r => r.equity_krw));
+      await renderConditions(); await renderLongTerm();
+    }
+    if (tab === 'trades') {
+      const j = await api('/api/journal?limit=60');
+      $('journal').innerHTML = j.length ? j.map(x => `<div class="item" onclick="showChart(${x.id})" style="cursor:pointer">
+        <div class="top"><span>${esc(x.symbol)} <span class="mut" style="font-weight:400">${MKT[x.market]}</span></span><span class="${cls(x.pnl_krw)}">${won(x.pnl_krw)}</span></div>
+        <div class="sub">${num(x.entry)} → ${num(x.exit)} · ${when(x.opened)} → ${when(x.closed)}</div>
+        <div class="sub">In: ${esc(x.entry_reason)}</div><div class="sub">Out: ${esc(x.exit_reason)}</div>
+        ${x.ai ? `<div class="sub">🤖 ${esc(x.ai)}</div>` : ''}<div id="chart-${x.id}"></div></div>`).join('') : '<div class="empty">No closed trades yet.</div>';
+      const t = await api('/api/trades?limit=60');
+      $('trades').innerHTML = t.length ? t.map(x => `<div class="item"><div class="top"><span><span class="tag ${x.side}">${x.side}</span>${esc(x.symbol)}</span><span class="${cls(x.pnl_krw)}">${x.pnl_krw == null ? won(x.value_krw) : won(x.pnl_krw)}</span></div>
+        <div class="sub">${num(x.qty)} @ ${num(x.price)} · ${when(x.ts)} · ${esc(x.mode)}${x.slippage_pct != null ? ' · slip ' + (+x.slippage_pct).toFixed(3) + '%' : ''}</div></div>`).join('') : '<div class="empty">No orders yet.</div>';
+    }
+    if (tab === 'signals') {
+      const g = await api('/api/signals?limit=100');
+      $('signals').innerHTML = g.length ? g.map(x => { const veto = /^AI|blocked|skipped|failed|filtered/.test(x.outcome);
+        return `<div class="item"><div class="top"><span><span class="tag ${veto ? 'veto' : x.action}">${x.action}</span>${esc(x.key.split(':')[1])}</span><span class="mut" style="font-weight:400;font-size:13px">${when(x.ts)}</span></div>
+          <div class="sub">${esc(x.reason)}</div><div class="sub"><b>${esc(x.outcome)}</b></div></div>`; }).join('') : '<div class="empty">No signals yet. Rules only fire on real setups — this can take hours or days.</div>';
+    }
+    if (tab === 'insights') await renderInsights();
+    if (tab === 'settings' && tabChanged) await renderSettings();
+  } catch (e) { if (e.message !== 'auth') $('lastErr').textContent = '⚠ ' + e.message; }
+}
+
+async function togglePause() { await post(ST && ST.paused ? '/api/resume' : '/api/pause'); load(); }
+async function kill() {
+  try { const r = await post('/api/kill', {confirm: $('killTxt').value.trim()}); $('killMsg').textContent = r.results.join(' · ') || 'No positions.'; $('killTxt').value = ''; load(); }
+  catch (e) { $('killMsg').textContent = e.message; }
+}
+
+let timer = null;
+function start() { $('login').style.display = 'none'; $('app').style.display = 'block'; load(true); clearInterval(timer); timer = setInterval(() => { if (document.querySelector('nav button.on').dataset.t !== 'settings') load(); }, 10000); }
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+SID ? start() : showLogin();
+</script>
+</body>
+</html>

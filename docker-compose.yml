@@ -1,0 +1,29 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data               # database + KIS token cache survive restarts
+      - ./config.toml:/app/config.toml:ro
+    expose:
+      - "8000"
+
+  # HTTPS in front of the dashboard. Set DOMAIN in .env (e.g. bot.yourdomain.com)
+  # and point that domain's DNS A-record at this server.
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - bot
+
+volumes:
+  caddy_data:
