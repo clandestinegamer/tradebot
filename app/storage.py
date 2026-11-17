@@ -155,6 +155,23 @@ class Store:
             self.conn.execute("DELETE FROM events WHERE id < (SELECT MAX(id) - 500 FROM events)")
             self.conn.commit()
 
+    PAPER_STATE_PREFIXES = ("paper_cash", "start_equity", "day_open:", "last_bar:", "dca_last:", "grid_state:",
+                            "reconcile_result", "drift", "core_", "retest")
+
+    def reset_paper(self, starting_cash: float) -> None:
+        """Start the paper account over: no positions, no trade history, fresh cash.
+        Keeps sign-ins, dashboard settings and alert setup."""
+        with self.lock:
+            for t in ("positions", "trades", "shadow", "signals", "equity"):
+                self.conn.execute(f"DELETE FROM {t}")
+            for k in [r["k"] for r in self.conn.execute("SELECT k FROM state")]:
+                if k.startswith(self.PAPER_STATE_PREFIXES):
+                    self.conn.execute("DELETE FROM state WHERE k = ?", (k,))
+            self.conn.commit()
+        self.set("paper_cash", starting_cash)
+        self.set("start_equity", starting_cash)
+        self.event("paper account started over")
+
     def events(self, limit: int = 30) -> list[dict]:
         with self.lock:
             rows = self.conn.execute("SELECT * FROM events ORDER BY id DESC LIMIT ?", (limit,)).fetchall()

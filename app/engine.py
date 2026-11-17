@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from .ai_review import AIReviewer
-from .config import Config, SymbolCfg, apply_overrides
+from .config import Config, SymbolCfg, apply_overrides, is_crypto, is_usd
 from .models import Position
 from .risk import RiskManager
 from .storage import Store, now_iso
@@ -16,7 +16,7 @@ from .strategies import get_strategy
 
 log = logging.getLogger("tradebot")
 SEOUL = ZoneInfo("Asia/Seoul")
-MKT = {"upbit": "Upbit", "kis_kr": "KRX", "kis_us": "US"}
+MKT = {"upbit": "Upbit", "binance": "Binance", "kis_kr": "KRX", "kis_us": "US"}
 
 
 def trailed_stop(pos: Position, price: float, risk, fee_rate: float) -> float:
@@ -113,7 +113,7 @@ class Engine:
 
     def _fx_for(self, market: str) -> float:
         f = getattr(self.data, "fx_market", None)
-        return f(market) if f else (self.cfg.usd_krw if market == "kis_us" else 1.0)
+        return f(market) if f else (self.cfg.usd_krw if is_usd(market) else 1.0)
 
     def position_value_krw(self) -> float:
         return sum(p.qty * self.last_prices.get(p.key, p.avg_price) * self._fx_for(p.market)
@@ -139,7 +139,7 @@ class Engine:
             if t["side"] == "BUY":
                 buys[t["key"]] = t
         for p in self.store.positions():
-            if p.market != "kis_us":
+            if not is_usd(p.market):
                 continue
             px = self.last_prices.get(p.key, p.avg_price)
             value += p.qty * px * fx_now
@@ -170,6 +170,8 @@ class Engine:
             return DemoData(bar_seconds=60, history=bars + 1).candles(s.key, bars + 1).iloc[:-1]
         if s.market == "upbit":
             return self.data.upbit.candles(s.symbol, s.interval, bars + 1).iloc[:-1]
+        if s.market == "binance":
+            return self.data.binance.candles(s.symbol, s.interval, bars + 1).iloc[:-1]
         if s.market == "kis_kr":
             return self.data.kis.kr_daily(s.symbol, bars)
         return self.data.kis.us_daily(s.symbol, s.exchange, bars)
@@ -309,7 +311,7 @@ class Engine:
                 return skip(f"blocked by market conditions: {d.reason}", d.source)
             scale *= 0.5
             notes.append(f"half size: {d.reason}")
-        if s.market == "upbit" and is_crypto_weekend() and self.cfg.risk.weekend_crypto_mult < 1:
+        if is_crypto(s.market) and is_crypto_weekend() and self.cfg.risk.weekend_crypto_mult < 1:
             scale *= self.cfg.risk.weekend_crypto_mult
             notes.append(f"weekend size ×{self.cfg.risk.weekend_crypto_mult:g}")
         alloc, alloc_note = self._alloc_mult(s)
@@ -491,7 +493,7 @@ class Engine:
             self.notify(f"🚨 {s.symbol} SELL FAILED: {fill.message}\nCheck the broker app now.", key=f"sellfail:{s.key}")
             return
         buy = next((t for t in self.store.trades(500) if t["key"] == s.key and t["side"] == "BUY"), None)
-        buy_fx = fx if s.market != "kis_us" else ((buy or {}).get("fx_usdkrw") or fx)
+        buy_fx = fx if not is_usd(s.market) else ((buy or {}).get("fx_usdkrw") or fx)
         cost_basis = fill.qty * pos.avg_price * buy_fx
         pnl = fill.qty * fill.price * fx - cost_basis - fill.fee_krw
         if buy and buy["qty"]:
@@ -533,7 +535,7 @@ class Engine:
         pos = self.swing_positions()
         if lt:
             lines.append("Long-term: " + ", ".join(f"{p.symbol} ({p.key.split(':')[0]})" for p in lt))
-        cautions = [d.reason for m in ("kis_us", "upbit") for d in self.signals.check(m)]
+        cautions = [d.reason for m in ("kis_us", "upbit", "binance") for d in self.signals.check(m)]
         if cautions:
             lines.append("Caution: " + "; ".join(dict.fromkeys(cautions)))
         if pos:
@@ -554,6 +556,11 @@ class Engine:
             if self.data.upbit and self.data.upbit.access_key:
                 by_market["upbit"] = {f"KRW-{a['currency']}": float(a["balance"]) + float(a["locked"])
                                       for a in self.data.upbit.accounts()}
+            bn = getattr(self.data, "binance", None)
+            if bn and bn.api_key:
+                bal = bn.balances()
+                by_market["binance"] = {p.symbol: bal.get(bn.symbol_info(p.symbol)["base"], 0.0)
+                                        for p in self.store.positions() if p.market == "binance"}
             if self.data.kis:
                 by_market["kis_kr"] = {k: v[0] for k, v in self.data.kis.kr_balance()[0].items()}
                 us = {}

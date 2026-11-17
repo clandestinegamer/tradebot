@@ -30,20 +30,22 @@ stop_loss_atr        = 2.0    # initial stop-loss distance in ATRs below entry
 trail_atr            = 3.0    # trailing stop: follows the highest price at this many ATRs below (0 = off)
 breakeven_r          = 1.0    # once up 1× the initial risk, move the stop to break-even (0 = off)
 take_profit_atr      = 0      # fixed take-profit in ATRs (0 = none — let the trailing stop ride winners)
-min_order_krw        = 5000   # Upbit minimum is ₩5,000
+min_order_krw        = 10000  # Binance minimum is about $5 (Upbit ₩5,000)
 
 [fees]                        # estimates, per side, in % — check your own fee schedule
 upbit  = 0.05
+binance = 0.10                # 0.075% if you pay fees in BNB
 kis_kr = 0.10                 # includes an allowance for the sell-side transaction tax
 kis_us = 0.25
 
 [risk.market_risk_mult]       # scale risk-per-trade by market (ATR sizing already shrinks jumpy assets;
 upbit  = 0.75                 #  this adds a margin for crypto's 24/7 gaps and weekend moves)
+binance = 0.75
 kis_kr = 1.0
 kis_us = 1.0
 
 [correlation]                 # symbols that move together count as ONE bet
-groups = [["upbit:KRW-BTC", "upbit:KRW-ETH"], ["kis_kr:005930", "kis_kr:000660"]]
+groups = [["binance:BTCUSDT", "binance:ETHUSDT"], ["kis_kr:005930", "kis_kr:000660"]]
 max_per_group = 1
 
 [execution]
@@ -53,7 +55,7 @@ kr_order_type      = "best_limit"  # KRX: 최유리지정가 (fills at the best 
 stale_seconds      = 300      # skip buys if the latest trade price is more than 5 min old
 us_retries         = 2        # unfilled US limit order: re-price twice…
 us_step_pct        = 0.5      # …0.5% further each time, then cancel whatever is left
-fast_stops         = true     # real-time stops: Upbit live price feed; stock positions every 10 s
+fast_stops         = true     # real-time stops: Upbit live price feed; Binance and stocks every 10 s
 
 [alerts]                      # Telegram / KakaoTalk keys go in .env
 trades = true                 # message on every buy and sell
@@ -83,7 +85,8 @@ us_extra = []
 [regime]                      # only BUY when the wider market is in an uptrend
 enabled = true
 ma      = 50                  # benchmark's last daily close must be above its 50-day average
-upbit   = "KRW-BTC"           # crypto benchmark
+upbit   = "KRW-BTC"           # crypto benchmark (Upbit)
+binance = "BTCUSDT"           # crypto benchmark (Binance)
 kis_kr  = "069500"            # KODEX 200 ETF (tracks KOSPI 200)
 kis_us  = "SPY"               # S&P 500 ETF
 kis_us_exchange = "AMEX"      # SPY trades on NYSE Arca = KIS code AMEX
@@ -148,8 +151,8 @@ rebalance_band_pct = 10
 # Smart dollar-cost averaging — buy a fixed amount on a schedule; ×2 when RSI < 30, ×1.5 below the
 # 200-day average (max ×3). Uncomment to use.
 # [[dca]]
-# symbol = "KRW-BTC"
-# market = "upbit"
+# symbol = "BTCUSDT"
+# market = "binance"
 # amount_krw = 100000
 # every = "week"              # day | week | month
 # weekday = 0                 # for weekly: 0 = Monday
@@ -161,12 +164,13 @@ rebalance_band_pct = 10
 # every = "month"
 # day = 5
 
-# Grid trading (Upbit only) — for a coin moving sideways. Buys each step down, sells one step up.
+# Grid trading (crypto: market = "binance" or "upbit") — for a coin moving sideways. Buys each step down, sells one step up.
 # Stops and sells everything if the price falls stop_below_pct under the range. Uncomment to use.
 # [[grid]]
-# symbol = "KRW-XRP"
-# lower = 2700
-# upper = 3300
+# symbol = "XRPUSDT"
+# market = "binance"
+# lower = 2.0
+# upper = 2.4
 # levels = 10
 # budget_krw = 1000000
 # stop_below_pct = 5
@@ -185,8 +189,8 @@ ai_enabled = false
 risk = { stop_loss_atr = 1.5, trail_atr = 2.0 }
 
 # ── Watchlist ────────────────────────────────────────────────
-# market: "upbit" (crypto, 24/7) | "kis_kr" (KOSPI/KOSDAQ) | "kis_us" (US stocks)
-# interval: upbit → "60m", "240m", "day" ; kis_* → "day"
+# market: "binance" (crypto, USDT pairs, 24/7) | "upbit" (crypto, KRW pairs) | "kis_kr" (KOSPI/KOSDAQ) | "kis_us" (US stocks)
+# interval: binance/upbit → "60m", "240m", "day" ; kis_* → "day"
 # strategy: "trend_rsi" (trend-following) | "vol_breakout" (breakout) | "dip_buy" (buy dips in an uptrend)
 # params (optional): override strategy settings — paste what `python -m app.backtest --walkforward` recommends.
 #   trend_rsi:    fast=20, slow=50, long_ma=200, adx_min=20, vol_mult=1.2, rsi_max=70   (0 turns a filter off)
@@ -199,14 +203,14 @@ risk = { stop_loss_atr = 1.5, trail_atr = 2.0 }
 # strategy = "auto" switches between trend_rsi (trending, ADX ≥ 20) and dip_buy (choppy) automatically.
 
 [[symbols]]
-symbol = "KRW-BTC"
-market = "upbit"
+symbol = "BTCUSDT"
+market = "binance"
 interval = "60m"
 strategy = "trend_rsi"
 
 [[symbols]]
-symbol = "KRW-ETH"
-market = "upbit"
+symbol = "ETHUSDT"
+market = "binance"
 interval = "60m"
 strategy = "trend_rsi"
 

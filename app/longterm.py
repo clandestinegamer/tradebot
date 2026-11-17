@@ -113,7 +113,7 @@ class LongTerm:
         cost = fill.qty * p.avg_price * fx
         pnl = fill.qty * fill.price * fx - cost - fill.fee_krw
         p.qty -= fill.qty
-        if p.qty <= 1e-9 or (s.market == "upbit" and p.qty * price * fx < 1000):
+        if p.qty <= 1e-9 or (s.market in ("upbit", "binance") and p.qty * price * fx < 1000):
             self.e.store.delete_position(key)
         else:
             self.e.store.save_position(p)
@@ -268,8 +268,9 @@ class LongTerm:
     def grid(self) -> None:
         for g in self.cfg.grid:
             sym = g["symbol"]
-            s = self.symcfg("upbit", sym)
-            key = f"grid:upbit:{sym}"
+            mkt = g.get("market", "upbit")
+            s = self.symcfg(mkt, sym)
+            key = f"grid:{mkt}:{sym}"
             st_key = f"grid_state:{sym}"
             st = self.e.store.get(st_key) or {"lots": {}, "stopped": False, "above_alerted": False}
             if st.get("stopped"):
@@ -280,10 +281,10 @@ class LongTerm:
             if price < stop_at:
                 pos = self.e.store.position(key)
                 if pos:
-                    self._sell(key, s, pos.qty, f"Grid {sym} stopped: price fell below {stop_at:,.0f}")
+                    self._sell(key, s, pos.qty, f"Grid {sym} stopped: price fell below {stop_at:,.6g}")
                 st.update(lots={}, stopped=True)
                 self.e.store.set(st_key, st)
-                self.e.notify(f"🛑 Grid {sym} stopped — price {price:,.0f} broke below the range. Set a new range to restart.")
+                self.e.notify(f"🛑 Grid {sym} stopped — price {price:,.6g} broke below the range. Set a new range to restart.")
                 continue
             per_lot = float(g["budget_krw"]) / int(g["levels"])
             # sell lots whose next line up has been reached
@@ -306,7 +307,7 @@ class LongTerm:
                     break
             if price >= lines[-1] and not st.get("above_alerted"):
                 st["above_alerted"] = True
-                self.e.notify(f"ℹ️ Grid {sym}: price {price:,.0f} is above the range — nothing to do until it comes back.")
+                self.e.notify(f"ℹ️ Grid {sym}: price {price:,.6g} is above the range — nothing to do until it comes back.")
             elif price < lines[-1]:
                 st["above_alerted"] = False
             st["last_price"] = price

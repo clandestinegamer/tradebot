@@ -59,7 +59,8 @@ class AIReviewer:
         if self.client is None:
             return self._fail("ANTHROPIC_API_KEY is not set")
 
-        venue = {"upbit": "Upbit (Korean crypto exchange, KRW pairs)", "kis_kr": "KRX (Korean stock)",
+        venue = {"upbit": "Upbit (Korean crypto exchange, KRW pairs)", "binance": "Binance (crypto, USDT pairs)",
+                 "kis_kr": "KRX (Korean stock)",
                  "kis_us": "US stock exchange"}[market]
         prompt = (
             f"Proposed BUY: {symbol} on {venue}\n"

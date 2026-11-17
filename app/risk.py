@@ -18,8 +18,8 @@ class BuyPlan:
 
 
 def round_qty(qty: float, market: str) -> float:
-    if market == "upbit":
-        return math.floor(qty * 1e8) / 1e8  # crypto: 8 decimals
+    if market in ("upbit", "binance"):
+        return math.floor(qty * 1e8) / 1e8  # crypto: 8 decimals (Binance trims to its step size when ordering)
     return float(math.floor(qty))           # stocks: whole shares
 
 

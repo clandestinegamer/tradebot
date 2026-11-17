@@ -10,6 +10,8 @@ It needs in its own .env:
     TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (or Kakao keys)   for alerts
     Optional, to SELL on its own:  UPBIT_ACCESS_KEY / UPBIT_SECRET_KEY  — create a SEPARATE Upbit key
         whitelisted to this machine's IP (Upbit keys are IP-locked), trading permission only, never withdrawals.
+    Optional: BINANCE_API_KEY / BINANCE_API_SECRET — a SEPARATE Binance key restricted to this machine's IP,
+        spot trading only, never withdrawals — so it can sell Binance positions.
     Optional: KIS_* keys (same account) so it can watch and sell stock positions too.
 
 Every 30 s it copies the bot's open positions and stops. If the bot can't be reached for
@@ -31,10 +33,10 @@ log = logging.getLogger("guardian")
 
 class Guardian:
     def __init__(self, url: str, token: str, notifier, upbit=None, kis=None, takeover_minutes: float = 5,
-                 state_file: str = "guardian_state.json", session=None):
+                 state_file: str = "guardian_state.json", session=None, binance=None):
         self.url, self.token = url.rstrip("/"), token
         self.notify = notifier
-        self.upbit, self.kis = upbit, kis
+        self.upbit, self.kis, self.binance = upbit, kis, binance
         self.takeover_s = takeover_minutes * 60
         self.state_path = Path(state_file)
         self.http = session or requests.Session()
@@ -64,6 +66,9 @@ class Guardian:
             if p["market"] == "upbit":
                 from .brokers.upbit import UpbitClient
                 return (self.upbit or UpbitClient()).price(p["symbol"])
+            if p["market"] == "binance":
+                from .brokers.binance import BinanceClient
+                return (self.binance or BinanceClient()).price(p["symbol"])
             if self.kis is None:
                 return None
             if p["market"] == "kis_kr":
@@ -78,6 +83,9 @@ class Guardian:
             if p["market"] == "upbit" and self.upbit and self.upbit.access_key:
                 o = self.upbit.sell_market(p["symbol"], p["qty"])
                 return f"sold (Upbit order {o.get('uuid', '?')})"
+            if p["market"] == "binance" and self.binance and self.binance.api_key:
+                f = self.binance.sell_market(p["symbol"], p["qty"])
+                return f"sold (Binance order {f.get('order_id', '?')})"
             if p["market"] == "kis_kr" and self.kis:
                 self.kis.kr_order("sell", p["symbol"], int(p["qty"]), "market")
                 return "sell order sent to KIS"
@@ -149,6 +157,7 @@ def main() -> None:
         pass
     import os
     from .alerts import Notifier
+    from .brokers.binance import BinanceClient
     from .brokers.kis import KISClient
     from .brokers.upbit import UpbitClient
     from .config import load_secrets
@@ -162,8 +171,9 @@ def main() -> None:
     upbit = UpbitClient(s.upbit_access, s.upbit_secret) if s.upbit_access else None
     kis = KISClient(s.kis_app_key, s.kis_app_secret, s.kis_account_no, s.kis_account_product, s.kis_env) \
         if s.kis_app_key else None
-    n.send(f"🛡 Guardian started — watching {a.url}" + ("" if (upbit or kis) else " (alert-only: no broker keys)"))
-    Guardian(a.url, token, n.send, upbit, kis, a.takeover_minutes).run()
+    binance = BinanceClient(s.binance_key, s.binance_secret) if s.binance_key else None
+    n.send(f"🛡 Guardian started — watching {a.url}" + ("" if (upbit or kis or binance) else " (alert-only: no broker keys)"))
+    Guardian(a.url, token, n.send, upbit, kis, a.takeover_minutes, binance=binance).run()
 
 
 if __name__ == "__main__":

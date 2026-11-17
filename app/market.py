@@ -1,4 +1,4 @@
-"""Routes market-data requests to Upbit, KIS or the demo generator, and knows market hours."""
+"""Routes market-data requests to Upbit, Binance, KIS or the demo generator, and knows market hours."""
 from __future__ import annotations
 
 import threading
@@ -8,9 +8,10 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from .brokers.binance import BinanceClient
 from .brokers.kis import KISClient
 from .brokers.upbit import UpbitClient
-from .config import Config, SymbolCfg
+from .config import Config, SymbolCfg, is_crypto, is_usd
 from .demo import DemoData
 from .indicators import sma
 
@@ -24,7 +25,7 @@ SESSIONS = {"kis_kr": (SEOUL, dtime(9, 0), dtime(15, 20)),       # stop before t
 
 def market_open(market: str, now: datetime | None = None, calendar=None) -> bool:
     """Regular sessions only, on exchange trading days."""
-    if market == "upbit":
+    if is_crypto(market):
         return True
     tz, o, c = SESSIONS[market]
     t = (now or datetime.now(tz)).astimezone(tz)
@@ -37,7 +38,7 @@ def market_open(market: str, now: datetime | None = None, calendar=None) -> bool
 
 
 def minutes_since_open(market: str, now: datetime | None = None) -> float | None:
-    if market == "upbit":
+    if is_crypto(market):
         return None
     tz, o, _ = SESSIONS[market]
     t = (now or datetime.now(tz)).astimezone(tz)
@@ -46,12 +47,13 @@ def minutes_since_open(market: str, now: datetime | None = None) -> float | None
 
 class MarketData:
     def __init__(self, cfg: Config, upbit: UpbitClient | None = None, kis: KISClient | None = None,
-                 demo: DemoData | None = None, calendar=None):
+                 demo: DemoData | None = None, calendar=None, binance: BinanceClient | None = None):
         self.cfg = cfg
         self.demo = demo if cfg.data_source == "demo" else None
         if cfg.data_source == "demo" and self.demo is None:
             self.demo = DemoData(cfg.demo_bar_seconds)
         self.upbit = upbit
+        self.binance = binance
         self.kis = kis
         self._regime_cache: dict[str, tuple[float, bool, str]] = {}
         self._cache: dict[tuple, tuple[float, object]] = {}  # short-lived; shared by side-by-side accounts
@@ -85,6 +87,8 @@ class MarketData:
             return 0.0
         if s.market == "upbit":
             return self.upbit.ticker(s.symbol)[1]
+        if s.market == "binance":
+            return self.binance.ticker(s.symbol)[1]
         return None  # KIS quotes carry no trade time; stale KIS data is caught by the candle-date check
 
     def spread_pct(self, s: SymbolCfg) -> float | None:
@@ -93,6 +97,8 @@ class MarketData:
         try:
             if s.market == "upbit":
                 bid, ask = self.upbit.quote(s.symbol)
+            elif s.market == "binance":
+                bid, ask = self.binance.quote(s.symbol)
             elif s.market == "kis_kr":
                 bid, ask = self.kis.kr_quote(s.symbol)
             else:
@@ -122,7 +128,7 @@ class MarketData:
         return self.fx_market(s.market)
 
     def fx_market(self, market: str) -> float:
-        if market != "kis_us":
+        if not is_usd(market):
             return 1.0
         return self.fx_rates.usd_krw() if self.fx_rates else self.cfg.usd_krw
 
@@ -141,7 +147,7 @@ class MarketData:
             if self.demo:
                 start = datetime.fromisoformat(bar_ts).replace(tzinfo=ZoneInfo("UTC"))
                 length = self.demo.bar_seconds
-            elif s.market == "upbit":
+            elif is_crypto(s.market):
                 start = datetime.fromisoformat(bar_ts).replace(tzinfo=SEOUL)
                 length = 86400 if s.interval == "day" else int(s.interval.rstrip("m")) * 60
             else:  # KIS daily candle = one session
@@ -168,11 +174,13 @@ class MarketData:
             df = self.demo.candles(f"{market}:{bench}", r.ma + 10).iloc[:-1]
         elif market == "upbit":
             df = self.upbit.candles(bench, "day", r.ma + 10).iloc[:-1]
+        elif market == "binance":
+            df = self.binance.candles(bench, "day", r.ma + 10).iloc[:-1]
         elif market == "kis_kr":
             df = self.kis.kr_daily(bench, r.ma + 10)
         else:
             df = self.kis.us_daily(bench, r.kis_us_exchange, r.ma + 10)
-        if market != "upbit" and not self.demo and len(df):
+        if not is_crypto(market) and not self.demo and len(df):
             today = datetime.now(SEOUL if market == "kis_kr" else NEW_YORK).strftime("%Y%m%d")
             if str(df.index[-1]) == today:
                 df = df.iloc[:-1]  # use the last COMPLETED day
@@ -195,6 +203,8 @@ class MarketData:
             return self.demo.candles(s.key, count), True
         if s.market == "upbit":
             return self.upbit.candles(s.symbol, s.interval, count), True
+        if s.market == "binance":
+            return self.binance.candles(s.symbol, s.interval, count), True
         if s.market == "kis_kr":
             df = self.kis.kr_daily(s.symbol, count)
             today = datetime.now(SEOUL).strftime("%Y%m%d")
@@ -211,6 +221,8 @@ class MarketData:
             return self.demo.price(s.key)
         if s.market == "upbit":
             return self.upbit.price(s.symbol)
+        if s.market == "binance":
+            return self.binance.price(s.symbol)
         if s.market == "kis_kr":
             return self.kis.kr_price(s.symbol)
         return self.kis.us_price(s.symbol, s.exchange)

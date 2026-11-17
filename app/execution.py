@@ -1,8 +1,9 @@
-"""Order execution: PaperExecutor (simulated) and LiveExecutor (real Upbit / KIS orders)."""
+"""Order execution: PaperExecutor (simulated) and LiveExecutor (real Upbit / Binance / KIS orders)."""
 from __future__ import annotations
 
 import time
 
+from .brokers.binance import BinanceClient
 from .brokers.kis import KISClient
 from .brokers.upbit import UpbitClient
 from .config import Config, SymbolCfg
@@ -52,12 +53,19 @@ class LiveExecutor:
 
     mode = "live"
 
-    def __init__(self, cfg: Config, upbit: UpbitClient | None, kis: KISClient | None):
-        self.cfg, self.upbit, self.kis = cfg, upbit, kis
+    def __init__(self, cfg: Config, upbit: UpbitClient | None, kis: KISClient | None,
+                 binance: BinanceClient | None = None, fx=None):
+        self.cfg, self.upbit, self.kis, self.binance = cfg, upbit, kis, binance
+        self._fx = fx or (lambda: cfg.usd_krw)   # USD→KRW, for Binance's USDT balance
+
+    def _binance_ready(self) -> bool:
+        return bool(self.binance and self.binance.api_key)
 
     def cash_krw(self, market: str | None = None) -> float:
         if market == "upbit":
             return self.upbit.krw_available() if self.upbit else 0.0
+        if market == "binance":
+            return self.binance.free("USDT") * self._fx() if self._binance_ready() else 0.0
         if market in ("kis_kr", "kis_us"):
             # kis_us assumes 통합증거금 (integrated margin) so KRW can fund USD buys
             return self.kis.kr_balance()[1] if self.kis else 0.0
@@ -67,6 +75,8 @@ class LiveExecutor:
         total = 0.0
         if self.upbit and self.upbit.access_key:
             total += self.upbit.krw_available()
+        if self._binance_ready():
+            total += self.binance.free("USDT") * self._fx()
         if self.kis and self.kis.app_key:
             total += self.kis.kr_balance()[1]
         return total
@@ -117,9 +127,19 @@ class LiveExecutor:
                 break
         return abs(qty - before), avg
 
+    def _binance_fill(self, f: dict, fx: float, fee_rate: float) -> Fill:
+        if f["qty"] <= 0:
+            return Fill(False, order_id=f["order_id"], message=f"order {f['state']} with no fill")
+        fee_usdt = f["fee_usdt"]
+        if f["fee_other"]:   # fee paid in BNB etc.: value it at the configured rate
+            fee_usdt += f["quote"] * fee_rate
+        return Fill(True, f["qty"], f["avg_price"], fee_usdt * fx, f["order_id"])
+
     # ── orders ──
     def buy(self, s: SymbolCfg, qty: float, price: float, fx: float) -> Fill:
         fee_rate = self.cfg.fee_rate(s.market)
+        if s.market == "binance":
+            return self._binance_fill(self.binance.buy_market_quote(s.symbol, qty * price), fx, fee_rate)
         if s.market == "upbit":
             o = self.upbit.buy_market_krw(s.symbol, qty * price)
             f = self.upbit.wait_fill(o["uuid"])
@@ -144,6 +164,12 @@ class LiveExecutor:
 
     def sell(self, s: SymbolCfg, qty: float, price: float, fx: float) -> Fill:
         fee_rate = self.cfg.fee_rate(s.market)
+        if s.market == "binance":
+            held = self.binance.balances().get(self.binance.symbol_info(s.symbol)["base"], 0.0)
+            qty = min(qty, held)   # never try to sell more than the wallet holds
+            if qty <= 0:
+                return Fill(False, message="Binance shows none of this coin to sell")
+            return self._binance_fill(self.binance.sell_market(s.symbol, qty), fx, fee_rate)
         if s.market == "upbit":
             o = self.upbit.sell_market(s.symbol, qty)
             f = self.upbit.wait_fill(o["uuid"])

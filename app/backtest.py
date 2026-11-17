@@ -588,6 +588,9 @@ def _load(a, cfg: Config, symbol: str, market: str, interval: str, bars: int) ->
     if market == "upbit":
         from .brokers.upbit import UpbitClient
         return UpbitClient().candles(symbol, interval, bars + 1).iloc[:-1]
+    if market == "binance":
+        from .brokers.binance import BinanceClient
+        return BinanceClient().candles(symbol, interval, bars + 1).iloc[:-1]
     from .brokers.kis import KISClient
     kis = KISClient(s.kis_app_key, s.kis_app_secret, s.kis_account_no, s.kis_account_product, s.kis_env)
     return kis.kr_daily(symbol, bars) if market == "kis_kr" else kis.us_daily(symbol, a.exchange, bars)
@@ -595,8 +598,8 @@ def _load(a, cfg: Config, symbol: str, market: str, interval: str, bars: int) ->
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--symbol", default="KRW-BTC")
-    ap.add_argument("--market", default="upbit", choices=["upbit", "kis_kr", "kis_us"])
+    ap.add_argument("--symbol", default="BTCUSDT")
+    ap.add_argument("--market", default="binance", choices=["binance", "upbit", "kis_kr", "kis_us"])
     ap.add_argument("--exchange", default="NASD")
     ap.add_argument("--interval", default="day")
     ap.add_argument("--strategy", default="trend_rsi", choices=["trend_rsi", "vol_breakout", "dip_buy", "auto"])
@@ -637,14 +640,15 @@ def main() -> None:
         return
     if a.grid:
         lo, hi, lv = a.grid
-        df = _load(a, cfg, a.symbol, "upbit", a.interval, a.bars)
-        r = run_grid(df, lo, hi, int(lv), a.budget, cfg.fee_rate("upbit"))
-        print(f"\nGrid {a.symbol} {lo:,.0f}–{hi:,.0f} × {int(lv)} steps · {len(df)} candles")
+        mkt = a.market if a.market in ("upbit", "binance") else "binance"
+        df = _load(a, cfg, a.symbol, mkt, a.interval, a.bars)
+        r = run_grid(df, lo, hi, int(lv), a.budget, cfg.fee_rate(mkt))
+        print(f"\nGrid {a.symbol} {lo:,.6g}–{hi:,.6g} × {int(lv)} steps · {len(df)} candles")
         print(f"  Return  : {r['return_pct']:+.2f}%  (holding: {r['hold_pct']:+.2f}%)   realized ₩{r['realized_krw']:,.0f}")
         print(f"  Trades  : {r['trades']}  · open lots at end {r['open_lots']}" + ("  · STOPPED below range" if r["stopped"] else ""))
         print("\n  Grids earn in sideways markets and lag (or stop out) in strong trends.\n")
         return
-    fx = cfg.usd_krw if a.market == "kis_us" else 1.0
+    fx = cfg.usd_krw if a.market in ("kis_us", "binance") else 1.0
     df = _load(a, cfg, a.symbol, a.market, a.interval, a.bars)
     print(f"\n{a.symbol} · {a.strategy} · {len(df)} candles ({df.index[0]} → {df.index[-1]})")
 
@@ -729,7 +733,7 @@ def portfolio_main(a, cfg: Config) -> None:
         a2 = argparse.Namespace(**{**vars(a), "exchange": s.exchange})
         df = _load(a2, cfg, s.symbol, s.market, "day", a.bars)
         specs.append({"key": s.key, "candles": df, "strategy": s.strategy, "market": s.market, "params": s.params,
-                      "fx": cfg.usd_krw if s.market == "kis_us" else 1.0, "fee_rate": cfg.fee_rate(s.market)})
+                      "fx": cfg.usd_krw if s.market in ("kis_us", "binance") else 1.0, "fee_rate": cfg.fee_rate(s.market)})
         if a.regime and cfg.regime.enabled and s.market not in regime:
             bench = getattr(cfg.regime, s.market)
             a3 = argparse.Namespace(**{**vars(a), "exchange": cfg.regime.kis_us_exchange})

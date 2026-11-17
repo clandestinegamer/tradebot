@@ -26,7 +26,7 @@ def closed_trades(trades: list[dict], year: int | None = None) -> list[dict]:
         if year and not str(t["ts"]).startswith(str(year)):
             continue
         b = last_buy.get(t["key"], {})
-        usd_native = t["market"] == "kis_us"
+        usd_native = t["market"] in ("kis_us", "binance")
         fx_buy = b.get("fx_usdkrw") or t.get("fx_usdkrw") or 0
         fx_sell = t.get("fx_usdkrw") or fx_buy
         qty = t["qty"]
@@ -87,7 +87,7 @@ def harvest_review(engine) -> dict:
         un_krw = (px - p.avg_price) * p.qty * fx
         if un_krw >= 0:
             continue
-        un_usd = (px - p.avg_price) * p.qty if p.market == "kis_us" else un_krw / fx_now
+        un_usd = (px - p.avg_price) * p.qty if p.market in ("kis_us", "binance") else un_krw / fx_now
         try:
             held = (datetime.now(timezone.utc) - datetime.fromisoformat(p.opened_at)).days
         except ValueError:

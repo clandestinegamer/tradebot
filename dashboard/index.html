@@ -132,10 +132,10 @@
       <div class="err" id="riskErr"></div></div>
     <div class="card"><h2>Watchlist</h2><div id="symForm"></div>
       <details><summary>Add a symbol</summary>
-        <input id="ns_symbol" placeholder="Symbol (e.g. KRW-SOL, 000660, MSFT)">
-        <select id="ns_market"><option value="upbit">Upbit (crypto)</option><option value="kis_kr">KRX (Korean stock)</option><option value="kis_us">US stock</option></select>
+        <input id="ns_symbol" placeholder="Symbol (e.g. SOLUSDT, 000660, MSFT)">
+        <select id="ns_market"><option value="binance">Binance (crypto, USDT)</option><option value="upbit">Upbit (crypto, KRW)</option><option value="kis_kr">KRX (Korean stock)</option><option value="kis_us">US stock</option></select>
         <select id="ns_strategy"><option value="trend_rsi">trend_rsi</option><option value="vol_breakout">vol_breakout</option><option value="dip_buy">dip_buy</option><option value="auto">auto (switches trend/dip by market type)</option></select>
-        <select id="ns_interval"><option value="day">day</option><option value="60m">60m (Upbit only)</option><option value="240m">240m (Upbit only)</option></select>
+        <select id="ns_interval"><option value="day">day</option><option value="60m">60m (crypto only)</option><option value="240m">240m (crypto only)</option></select>
         <select id="ns_exchange"><option value="NASD">NASDAQ</option><option value="NYSE">NYSE</option><option value="AMEX">AMEX / Arca</option></select>
         <div class="switch"><span>Inverse ETF (only bought when the market is falling)</span><input type="checkbox" id="ns_inverse"></div>
         <button style="width:100%" onclick="addSymbol()">Add</button>
@@ -161,6 +161,11 @@
         <div class="sub">Updates download from your bot server and install by themselves when you leave the app.</div></div>
       <div class="btns" style="margin-top:8px"><button class="small" id="appUpdBtn" onclick="TradeBotApp.checkForUpdate()">Check for updates</button>
         <button class="small" onclick="TradeBotApp.changeServer()">Change server</button></div></div>
+    <div class="card" id="paperCard"><h2>Paper account</h2>
+      <p class="mut" style="font-size:13px">Start the practice account over: closes nothing at a broker, just wipes paper positions and trade history and resets the cash. Useful after switching exchange. Type <b>RESET</b> to confirm.</p>
+      <input id="resetTxt" autocomplete="off" placeholder="RESET">
+      <button class="small" style="margin-top:6px" onclick="paperReset()">Start paper account over</button>
+      <div class="err" id="resetMsg"></div></div>
     <button onclick="logout()">Sign out this device</button>
   </section>
 </main>
@@ -181,7 +186,7 @@ const cls = v => v > 0 ? 'up' : v < 0 ? 'dn' : '';
 const num = v => v == null ? '—' : (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString('en-US') : (+v).toLocaleString('en-US', {maximumFractionDigits: 4}));
 const ago = iso => { if (!iso) return 'never'; const s = (Date.now() - new Date(iso)) / 1000; return s < 60 ? Math.round(s) + 's ago' : s < 3600 ? Math.round(s/60) + 'm ago' : new Date(iso).toLocaleString(); };
 const when = iso => iso ? new Date(iso).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '—';
-const MKT = {upbit: 'Upbit', kis_kr: 'KRX', kis_us: 'US'};
+const MKT = {upbit: 'Upbit', binance: 'Binance', kis_kr: 'KRX', kis_us: 'US'};
 
 async function api(path, opts = {}) {
   const r = await fetch(path, {...opts, headers: {'Authorization': 'Bearer ' + SID, 'Content-Type': 'application/json', ...(opts.headers || {})}});
@@ -224,7 +229,7 @@ function line(svg, vals, marks = []) {
 
 function render(s) {
   ST = s;
-  const m = $('mode'); m.textContent = s.mode === 'live' ? ('LIVE' + (s.live_capital_krw ? ' · ' + won(s.live_capital_krw) + ' cap' : '')) : (s.data_source === 'demo' ? 'PAPER · DEMO DATA' : 'PAPER'); m.className = 'badge ' + s.mode;
+  const m = $('mode'); m.textContent = s.mode === 'live' ? ('LIVE' + (s.live_capital_krw ? ' · ' + won(s.live_capital_krw) + ' cap' : '')) : (s.data_source === 'demo' ? 'PAPER · DEMO DATA' : 'PAPER'); m.className = 'badge ' + s.mode; if ($('paperCard')) $('paperCard').style.display = s.mode === 'live' ? 'none' : '';
   $('dot').className = 'dot ' + (s.last_error ? 'err' : s.paused ? 'paused' : 'ok');
   $('tick').textContent = 'checked ' + ago(s.last_tick);
   $('equity').textContent = won(s.equity_krw);
@@ -346,7 +351,7 @@ function toggleSym(i, on) { const syms = SET.symbols.map(s => ({...s})); syms[i]
 function removeSym(i) { if (!confirm('Remove ' + SET.symbols[i].symbol + ' from the watchlist?')) return; const syms = SET.symbols.filter((_, j) => j !== i); saveSettings({symbols: syms}, 'symErr'); }
 function addSymbol() {
   const market = $('ns_market').value, sym = {symbol: $('ns_symbol').value.trim().toUpperCase(), market, strategy: $('ns_strategy').value,
-    interval: market === 'upbit' ? $('ns_interval').value : 'day', exchange: $('ns_exchange').value, params: {}, enabled: true, inverse: $('ns_inverse').checked};
+    interval: (market === 'upbit' || market === 'binance') ? $('ns_interval').value : 'day', exchange: $('ns_exchange').value, params: {}, enabled: true, inverse: $('ns_inverse').checked};
   if (!sym.symbol) return; saveSettings({symbols: [...SET.symbols, sym]}, 'symErr'); $('ns_symbol').value = '';
 }
 async function backupNow() { try { const r = await post('/api/backup'); $('backupMsg').textContent = `${r.file} (${r.size_kb} KB) — ${r.shipped.join(', ') || 'kept on the server'}`; } catch (e) { $('backupMsg').textContent = e.message; } }
@@ -416,6 +421,11 @@ async function togglePause() { await post(ST && ST.paused ? '/api/resume' : '/ap
 async function kill() {
   try { const r = await post('/api/kill', {confirm: $('killTxt').value.trim()}); $('killMsg').textContent = r.results.join(' · ') || 'No positions.'; $('killTxt').value = ''; load(); }
   catch (e) { $('killMsg').textContent = e.message; }
+}
+
+async function paperReset() {
+  try { await post('/api/paper/reset', {confirm: $('resetTxt').value.trim()}); $('resetMsg').textContent = 'Done — fresh paper account.'; $('resetTxt').value = ''; load(); }
+  catch (e) { $('resetMsg').textContent = e.message; }
 }
 
 let timer = null;

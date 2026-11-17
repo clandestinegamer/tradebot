@@ -334,8 +334,9 @@ class MarketSignals:
                 checks.append(("earnings", lambda: self.earnings(symbol)))
         else:
             checks += [("etf_flows", self.etf_flows), ("funding", self.funding),
-                       ("cb_premium", self.coinbase_premium), ("upbit_premium", self.upbit_premium),
-                       ("fear_greed", self.fear_greed)]
+                       ("cb_premium", self.coinbase_premium), ("fear_greed", self.fear_greed)]
+            if market == "upbit":  # only Upbit's won prices can run hot against the rest of the world
+                checks.append(("upbit_premium", self.upbit_premium))
         for name, fn in checks:
             r = fn()
             if r.action:

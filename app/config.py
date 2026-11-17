@@ -14,7 +14,17 @@ except ImportError:  # pragma: no cover
 
 ROOT = Path(__file__).resolve().parent.parent
 
-VALID_MARKETS = {"upbit", "kis_kr", "kis_us"}
+VALID_MARKETS = {"upbit", "binance", "kis_kr", "kis_us"}
+CRYPTO_MARKETS = {"upbit", "binance"}   # trade 24/7, fractional quantities
+USD_MARKETS = {"binance", "kis_us"}     # priced in USD (Binance: USDT, counted 1:1 as USD)
+
+
+def is_crypto(market: str) -> bool:
+    return market in CRYPTO_MARKETS
+
+
+def is_usd(market: str) -> bool:
+    return market in USD_MARKETS
 VALID_STRATEGIES = {"trend_rsi", "vol_breakout", "dip_buy", "auto"}
 
 
@@ -52,7 +62,7 @@ class RiskCfg:
     pyramid_r: float = 0.0            # add to a winner once up this many R and its stop is at break-even (0 = off)
     pyramid_pct: float = 50.0         # …adding this % of the original size (once per trade)
     weekend_crypto_mult: float = 0.5  # crypto risk multiplier from Sat 00:00 to Mon 09:00 KST
-    market_risk_mult: dict = field(default_factory=lambda: {"upbit": 1.0, "kis_kr": 1.0, "kis_us": 1.0})
+    market_risk_mult: dict = field(default_factory=lambda: {"upbit": 1.0, "binance": 1.0, "kis_kr": 1.0, "kis_us": 1.0})
 
 
 # fields a phone can change, with allowed ranges
@@ -71,6 +81,7 @@ class RegimeCfg:
     enabled: bool = True
     ma: int = 50
     upbit: str = "KRW-BTC"
+    binance: str = "BTCUSDT"
     kis_kr: str = "069500"         # KODEX 200 ETF ≈ KOSPI 200
     kis_us: str = "SPY"
     kis_us_exchange: str = "AMEX"  # SPY trades on NYSE Arca → KIS code AMEX
@@ -210,6 +221,8 @@ class Secrets:
     totp_secret: str = ""
     upbit_access: str = ""
     upbit_secret: str = ""
+    binance_key: str = ""
+    binance_secret: str = ""
     kis_env: str = "demo"
     kis_app_key: str = ""
     kis_app_secret: str = ""
@@ -227,6 +240,7 @@ class Secrets:
 SECRET_ENV = {
     "dashboard_token": "DASHBOARD_TOKEN", "totp_secret": "TOTP_SECRET",
     "upbit_access": "UPBIT_ACCESS_KEY", "upbit_secret": "UPBIT_SECRET_KEY",
+    "binance_key": "BINANCE_API_KEY", "binance_secret": "BINANCE_API_SECRET",
     "kis_env": "KIS_ENV", "kis_app_key": "KIS_APP_KEY", "kis_app_secret": "KIS_APP_SECRET",
     "kis_account_no": "KIS_ACCOUNT_NO", "kis_account_product": "KIS_ACCOUNT_PRODUCT",
     "anthropic_key": "ANTHROPIC_API_KEY", "telegram_token": "TELEGRAM_BOT_TOKEN",
@@ -248,7 +262,7 @@ class Config:
     live_capital_krw: float = 0      # small-live start: the bot only uses this much (0 = whole account)
     paper_twin: bool = True          # in live mode, run a paper copy of the same settings to compare
     risk: RiskCfg = field(default_factory=RiskCfg)
-    fees: dict = field(default_factory=lambda: {"upbit": 0.05, "kis_kr": 0.10, "kis_us": 0.25})
+    fees: dict = field(default_factory=lambda: {"upbit": 0.05, "binance": 0.10, "kis_kr": 0.10, "kis_us": 0.25})
     ai: AICfg = field(default_factory=AICfg)
     regime: RegimeCfg = field(default_factory=RegimeCfg)
     execution: ExecutionCfg = field(default_factory=ExecutionCfg)
@@ -396,8 +410,8 @@ def validate(cfg: Config) -> None:
         if d["every"] not in ("day", "week", "month") or d["market"] not in VALID_MARKETS:
             raise ValueError(f"[[dca]] {d['symbol']}: every must be day/week/month and market valid")
     for g in cfg.grid:
-        if g.get("market", "upbit") != "upbit":
-            raise ValueError("grid trading is for Upbit crypto only")
+        if not is_crypto(g.get("market", "upbit")):
+            raise ValueError("grid trading is for crypto (Upbit or Binance) only")
         if not 0 < g["lower"] < g["upper"] or int(g["levels"]) < 2 or g["budget_krw"] <= 0:
             raise ValueError(f"[[grid]] {g.get('symbol')}: need 0 < lower < upper, levels ≥ 2, budget > 0")
     names = [v.get("name") for v in cfg.variants]

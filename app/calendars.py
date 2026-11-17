@@ -79,7 +79,7 @@ class Calendar:
         self._lock = threading.Lock()
 
     def is_trading_day(self, market: str, d: date) -> bool:
-        if market == "upbit":
+        if market in ("upbit", "binance"):
             return True
         if d.weekday() >= 5:
             return False

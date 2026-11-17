@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from .ai_review import AIReviewer
 from .alerts import Notifier
+from .brokers.binance import BinanceClient
 from .brokers.kis import KISClient
 from .brokers.upbit import UpbitClient
 from .config import EDITABLE_RISK, Config, load_config, symbols_to_dicts
@@ -37,6 +38,7 @@ def build_engine(cfg: Config, store: Store | None = None, ai_client=None, notifi
     s = cfg.secrets
     store = store or Store(cfg.db_path)
     upbit = UpbitClient(s.upbit_access, s.upbit_secret)
+    binance = BinanceClient(s.binance_key, s.binance_secret)
     kis = None
     if s.kis_app_key:
         kis = KISClient(s.kis_app_key, s.kis_app_secret, s.kis_account_no, s.kis_account_product, s.kis_env)
@@ -45,9 +47,9 @@ def build_engine(cfg: Config, store: Store | None = None, ai_client=None, notifi
         log.warning("KIS keys missing in .env: stock symbols are paused, crypto keeps trading")
         store.event("KIS keys not set up yet: stock symbols are paused until they're added to .env", "warn")
     fx = FXRates(store, cfg.usd_krw, online=cfg.data_source == "live")
-    data = MarketData(cfg, upbit=upbit, kis=kis)
+    data = MarketData(cfg, upbit=upbit, kis=kis, binance=binance)
     data.fx_rates = fx
-    ex = LiveExecutor(cfg, upbit, kis) if cfg.is_live else PaperExecutor(cfg, store)
+    ex = LiveExecutor(cfg, upbit, kis, binance, fx=fx.usd_krw) if cfg.is_live else PaperExecutor(cfg, store)
     ai = AIReviewer(cfg.ai, s.anthropic_key, client=ai_client)
     notifier = notifier or Notifier(s, store, cfg.alerts.error_cooldown_minutes)
     return Engine(cfg, store, data, ex, ai, notifier=notifier, fx=fx)
@@ -77,7 +79,7 @@ def _candle_utc(market: str, ts: str, demo: bool) -> datetime | None:
     try:
         if demo:
             return datetime.fromisoformat(ts).replace(tzinfo=timezone.utc)
-        if market == "upbit":
+        if market in ("upbit", "binance"):
             return datetime.fromisoformat(ts).replace(tzinfo=ZoneInfo("Asia/Seoul")).astimezone(timezone.utc)
         d = datetime.strptime(ts, "%Y%m%d")
         if market == "kis_kr":
@@ -295,7 +297,7 @@ def build_app(cfg: Config | None = None, engine: Engine | None = None, run_loop:
             "risk": {k: getattr(c.risk, k) for k in EDITABLE_RISK},
             "regime": {"enabled": c.regime.enabled,
                        "status": {m: getattr(e.data, "_regime_cache", {}).get(m, (0, None, ""))[2]
-                                  for m in ("upbit", "kis_kr", "kis_us")}},
+                                  for m in ("upbit", "binance", "kis_kr", "kis_us")}},
             "reconcile": store.get("reconcile_result"),
             "backup_last": store.get("backup_last"), "guardian_seen": store.get("guardian_seen"),
             "live_capital_krw": c.live_capital_krw if c.is_live else 0,
@@ -474,6 +476,21 @@ def build_app(cfg: Config | None = None, engine: Engine | None = None, run_loop:
         if body.confirm != "SELL ALL":
             raise HTTPException(400, 'type "SELL ALL" to confirm')
         return {"results": engine.kill()}
+
+    @app.post("/api/paper/reset", dependencies=[Depends(auth)])
+    def paper_reset(body: KillBody):
+        if engine.cfg.is_live:
+            raise HTTPException(400, "only a paper account can be started over")
+        if body.confirm != "RESET":
+            raise HTTPException(400, 'type "RESET" to confirm')
+        with engine.lock:
+            engine.store.reset_paper(engine.cfg.starting_cash_krw)
+            engine.last_prices.clear()
+        for _, v in app_variants:
+            with v.lock:
+                v.store.reset_paper(v.cfg.starting_cash_krw)
+                v.last_prices.clear()
+        return {"ok": True}
 
     @app.post("/api/retest", dependencies=[Depends(auth)])
     def retest():

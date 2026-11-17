@@ -58,7 +58,16 @@ All limits are in `config.toml`.
 
 ## 3. Set up the real accounts
 
-**Upbit (crypto)**
+**Binance (crypto, the default watchlist: BTCUSDT, ETHUSDT)**
+1. On binance.com, go to Profile → **API Management** → **Create API** → *System generated*.
+2. Edit restrictions: tick **Enable Reading** and **Enable Spot & Margin Trading** only. **Never tick Enable Withdrawals**, Margin loan, Futures or Universal Transfer.
+3. Choose **Restrict access to trusted IPs only** and enter your server's fixed IP.
+4. Keep USDT in your **Spot** wallet; the bot buys with USDT and counts it as US dollars (converted to won at the live rate).
+5. Put the keys in `.env` as `BINANCE_API_KEY` and `BINANCE_API_SECRET`.
+
+Binance does not serve US persons or, since October 2026, users in Korea through its website; it can close accounts it identifies as such. That risk is yours to weigh; keep only what you're trading on the exchange.
+
+**Upbit (crypto, KRW pairs; needs a K bank account)**
 1. On upbit.com, go to 마이페이지 → Open API 관리 → Open API Key 발급.
 2. Turn on 자산조회, 주문조회 and 주문하기 only. **Never turn on 출금 (withdrawals).**
 3. Add your server's **fixed IP** to the whitelist. This is why the bot runs on a server and not on your phone.

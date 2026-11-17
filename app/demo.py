@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 START_PRICES = {"KRW-BTC": 140_000_000.0, "KRW-ETH": 5_000_000.0, "KRW-XRP": 3_000.0,
+                "BTCUSDT": 95_000.0, "ETHUSDT": 3_400.0, "SOLUSDT": 180.0, "XRPUSDT": 2.2,
                 "005930": 75_000.0, "000660": 200_000.0, "AAPL": 230.0, "MSFT": 420.0, "NVDA": 140.0}
 
 
@@ -28,13 +29,13 @@ class DemoData:
         return int(hashlib.sha256(key.encode()).hexdigest()[:8], 16)
 
     def _vol(self, key: str) -> float:
-        return 0.012 if key.startswith("upbit") else 0.008
+        return 0.012 if key.startswith(("upbit", "binance")) else 0.008
 
     def _start_price(self, key: str) -> float:
         sym = key.split(":", 1)[1]
         if sym in START_PRICES:
             return START_PRICES[sym]
-        return 200.0 if key.startswith("kis_us") else 50_000.0
+        return 200.0 if key.startswith(("kis_us", "binance")) else 50_000.0
 
     def _extend(self, key: str, upto: int) -> dict:
         p = self._paths.get(key)
